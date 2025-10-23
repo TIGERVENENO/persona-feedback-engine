@@ -31,3 +31,15 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Environment Variables ###
+# Never commit .env file with real credentials and API keys
+.env
+.env.local
+.env.*.local
+
+### IDE ###
+*.swp
+*.swo
+*~
+.DS_Store
