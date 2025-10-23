@@ -152,17 +152,22 @@ public class AIGatewayService {
      */
     private String buildRequestBody(String systemPrompt, String userMessage) {
         try {
-            return objectMapper.writeValueAsString(objectMapper.createObjectNode()
-                    .put("model", model)
-                    .putArray("messages")
-                    .addObject()
-                    .put("role", "system")
-                    .put("content", systemPrompt)
-                    .end()
-                    .addObject()
-                    .put("role", "user")
-                    .put("content", userMessage)
-            );
+            var rootNode = objectMapper.createObjectNode();
+            rootNode.put("model", model);
+
+            var messagesArray = rootNode.putArray("messages");
+
+            // Add system message
+            var systemMessage = messagesArray.addObject();
+            systemMessage.put("role", "system");
+            systemMessage.put("content", systemPrompt);
+
+            // Add user message
+            var userMsg = messagesArray.addObject();
+            userMsg.put("role", "user");
+            userMsg.put("content", userMessage);
+
+            return objectMapper.writeValueAsString(rootNode);
         } catch (Exception e) {
             throw new AIGatewayException("Failed to build request body", "AI_SERVICE_ERROR", e);
         }
@@ -175,10 +180,14 @@ public class AIGatewayService {
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode content = root.at("/choices/0/message/content");
-            if (content.isMissing() || content.isNull()) {
+
+            // Check if the path exists and is not missing or null
+            if (content == null || content.isNull() || content.isMissingNode()) {
                 throw new AIGatewayException("Missing content in API response", "AI_SERVICE_ERROR");
             }
             return content.asText();
+        } catch (AIGatewayException e) {
+            throw e;
         } catch (Exception e) {
             throw new AIGatewayException("Failed to parse API response: " + e.getMessage(), "AI_SERVICE_ERROR", e);
         }
