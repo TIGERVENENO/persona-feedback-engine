@@ -21,9 +21,10 @@ Custom exceptions and global error handling for the application.
 - HTTP status: 400
 
 ### AIGatewayException
-- Thrown when OpenRouter API call fails
+- Thrown when AI provider API call fails (OpenRouter, AgentRouter, or any other provider)
 - Wraps HTTP errors and parsing failures
 - HTTP status: 500 (service error)
+- Includes provider-specific error messages
 
 ## GlobalExceptionHandler
 - Spring `@ControllerAdvice` bean
