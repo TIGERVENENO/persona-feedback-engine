@@ -5,9 +5,10 @@ A robust, scalable Spring Boot 3.5.7 backend service for generating AI personas 
 ## Overview
 
 The Persona Feedback Engine allows marketers to:
-1. **Generate AI Personas** - Create detailed, realistic customer profiles using Claude AI via OpenRouter
+1. **Generate AI Personas** - Create detailed, realistic customer profiles using any LLM model
 2. **Simulate Feedback** - Get product feedback from multiple personas simultaneously
 3. **Manage Sessions** - Track feedback generation progress and access results
+4. **Choose AI Provider & Model** - Switch between providers (OpenRouter, AgentRouter) and models without code changes
 
 The system uses a two-stage async workflow:
 - **Stage 1**: Heavy persona generation (cacheable by prompt)
@@ -27,8 +28,9 @@ cd persona-feedback-engine
 # 2. Create configuration from template
 cp .env.example .env
 
-# 3. Edit .env and set your OpenRouter API key
-#    OPENROUTER_API_KEY=your_key_here
+# 3. Edit .env and set your AI Provider API key
+#    OPENROUTER_API_KEY=your_key_here (for OpenRouter)
+#    AGENTROUTER_API_KEY=your_key_here (for AgentRouter)
 
 # 4. Start infrastructure (PostgreSQL, Redis, RabbitMQ)
 docker-compose up -d
@@ -55,7 +57,9 @@ docker-compose ps
 - **Java 21** - [Download JDK 21](https://www.oracle.com/java/technologies/javase/jdk21-archive-downloads.html)
 - **Maven 3.8+** - [Download Maven](https://maven.apache.org/download.cgi)
 - **Docker Desktop** - [Download Docker](https://www.docker.com/products/docker-desktop/)
-- **OpenRouter API Key** - [Get free credits](https://openrouter.ai/keys)
+- **AI Provider API Key** - Choose one:
+  - **OpenRouter** - [Get free credits](https://openrouter.ai/keys)
+  - **AgentRouter** - [Get free credits](https://agentrouter.ai/keys)
 
 ### Optional
 
@@ -77,7 +81,9 @@ nano .env  # or your preferred editor
 ```
 
 **Key environment variables:**
-- `OPENROUTER_API_KEY` - Your OpenRouter API key (required for AI features)
+- `AI_PROVIDER` - Which AI provider to use: `openrouter` or `agentrouter` (default: `agentrouter`)
+- `OPENROUTER_API_KEY` - Your OpenRouter API key (required if using OpenRouter)
+- `AGENTROUTER_API_KEY` - Your AgentRouter API key (required if using AgentRouter)
 - `POSTGRES_PASSWORD` - Database password (default: postgres)
 - `REDIS_PASSWORD` - Redis password (default: redispass)
 - `RABBITMQ_PASSWORD` - RabbitMQ password (default: guest)
@@ -391,6 +397,116 @@ GET "personaCache::Your persona generation prompt here"
 MONITOR
 ```
 
+## AI Provider & Model Configuration Guide
+
+The system supports multiple AI providers and models. You can switch between them without changing the codebase.
+
+### Supported Providers
+
+| Provider | API Key Format | URL | Notes |
+|----------|---|---|---|
+| **OpenRouter** | `sk-or-...` | https://openrouter.ai/api/v1/chat/completions | Full model access, pay-as-you-go |
+| **AgentRouter** | `sk-or-v1-...` | https://api.agentrouter.ai/v1/chat/completions | Optimized routing, competitive pricing |
+
+### Available Models
+
+Both providers support multiple LLM models. Examples:
+
+**Anthropic:**
+- `anthropic/claude-3-5-sonnet` - High performance, best for complex tasks
+- `anthropic/claude-3-5-haiku` - Fast, lightweight, lower cost
+- `anthropic/claude-3-opus` - Maximum capability
+
+**OpenAI:**
+- `openai/gpt-4-turbo` - Advanced reasoning and analysis
+- `openai/gpt-4o` - Multimodal capabilities
+- `openai/gpt-3.5-turbo` - Fast and cost-effective
+
+**Other providers:**
+- `mistral/mistral-large` - Fast open-source model
+- `meta-llama/llama-2-70b-chat` - Open source alternative
+- And many more available through OpenRouter/AgentRouter
+
+See [OpenRouter Models](https://openrouter.ai/docs#models) or [AgentRouter Models](https://agentrouter.ai/docs#models) for complete list.
+
+### How to Switch Provider & Model
+
+#### Option 1: Using Environment Variables (Recommended)
+
+Edit your `.env` file:
+
+```bash
+# Set which provider to use
+AI_PROVIDER=agentrouter
+
+# Set which model to use for each provider
+OPENROUTER_MODEL=anthropic/claude-3-5-sonnet
+AGENTROUTER_MODEL=anthropic/claude-3-5-sonnet
+
+# Provide credentials for the provider you're using
+AGENTROUTER_API_KEY=sk-or-v1-your-agentrouter-key-here
+OPENROUTER_API_KEY=sk-or-your-openrouter-key-here  # optional if not using OpenRouter
+```
+
+Then restart the application.
+
+#### Option 2: Direct Configuration File
+
+Edit `src/main/resources/application.properties`:
+
+```properties
+# ======== AI Provider Configuration ========
+app.ai.provider=agentrouter
+
+# ======== OpenRouter API Configuration ========
+app.openrouter.api-key=sk-or-YOUR_OPENROUTER_API_KEY_HERE
+app.openrouter.model=anthropic/claude-3-5-sonnet
+app.openrouter.retry-delay-ms=1000
+
+# ======== AgentRouter API Configuration ========
+app.agentrouter.api-key=sk-or-v1-YOUR_AGENTROUTER_API_KEY_HERE
+app.agentrouter.model=anthropic/claude-3-5-sonnet
+app.agentrouter.retry-delay-ms=1000
+```
+
+### Comparing Providers
+
+**When to use OpenRouter:**
+- Need access to wide variety of models
+- Want to compare different LLM providers
+- Building provider-agnostic applications
+
+**When to use AgentRouter:**
+- Want optimized routing and load balancing
+- Need consistent performance
+- Prefer competitive pricing
+
+### API Compatibility
+
+Both providers use the same OpenAI-compatible API format, so switching is seamless:
+
+```json
+{
+  "model": "<YOUR_CONFIGURED_MODEL>",
+  "messages": [
+    {
+      "role": "system",
+      "content": "Your system prompt"
+    },
+    {
+      "role": "user",
+      "content": "Your user message"
+    }
+  ]
+}
+```
+
+For example, if you configure `app.agentrouter.model=openai/gpt-4o`, the API will use GPT-4o. If you set it to `anthropic/claude-3-5-sonnet`, it will use Claude. You can change this anytime in your configuration.
+
+The `AIGatewayService` automatically handles provider-specific details (URLs, authentication, retries, and model selection) based on your configuration.
+
+---
+
 ## Testing the Application
 
 ### Run Tests
@@ -435,8 +551,9 @@ The application includes comprehensive integration tests:
 ┌──────────────────────▼──────────────────────────────────────┐
 │                   Service Layer                             │
 │  PersonaService          FeedbackService      AIGatewayService
-│  - Validation            - Session creation   - OpenRouter API
-│  - Task publishing       - Task publishing    - Token optimization
+│  - Validation            - Session creation   - Multi-provider support
+│  - Task publishing       - Task publishing    - OpenRouter & AgentRouter
+│                                                - Token optimization
 └──────────────────┬──────────────────┬────────────────────────┘
                    │                  │
         ┌──────────▼──────────┐      └──────┐
@@ -473,14 +590,14 @@ The application includes comprehensive integration tests:
 1. **Persona Generation**
    - API receives prompt → PersonaService validates → Creates Persona (GENERATING)
    - Task published to `persona.generation.queue`
-   - PersonaTaskConsumer processes → Calls AIGatewayService → Updates Persona (ACTIVE)
+   - PersonaTaskConsumer processes → Calls AIGatewayService → Selects configured provider (OpenRouter or AgentRouter) → Updates Persona (ACTIVE)
    - AI response cached by prompt for reusability
 
 2. **Feedback Generation**
    - API receives products + personas → FeedbackService validates ownership
    - Creates FeedbackSession (PENDING) + FeedbackResults (PENDING)
    - Task published to `feedback.generation.queue` for each product-persona pair
-   - FeedbackTaskConsumer processes → Fetches cached persona + product → Calls AI
+   - FeedbackTaskConsumer processes → Fetches cached persona + product → Calls AIGatewayService with selected provider
    - Updates FeedbackResult (COMPLETED)
    - When all results done → Updates FeedbackSession (COMPLETED)
 
@@ -544,24 +661,52 @@ cat .env | grep POSTGRES
 psql -h localhost -U postgres -d personadb -W
 ```
 
-### OpenRouter API key not working
+### AI Provider API key not working
 
-**Problem:** `AIGatewayException: Failed to call OpenRouter API`
+**Problem:** `AIGatewayException: Failed to call OpenRouter/AgentRouter API`
 
 **Solution:**
+
+First, check which provider is configured:
+```bash
+# Check which provider is active
+grep "app.ai.provider" src/main/resources/application.properties
+
+# Or check .env file
+grep "AI_PROVIDER" .env
+```
+
+**For OpenRouter:**
 ```bash
 # 1. Verify .env has OPENROUTER_API_KEY set
 grep OPENROUTER_API_KEY .env
 
-# 2. Test API key directly (replace with your key)
+# 2. Test API key directly
 curl https://openrouter.ai/api/v1/models \
   -H "Authorization: Bearer sk-or-YOUR_KEY_HERE"
 
-# 3. Check OpenRouter dashboard for API quota
+# 3. Check OpenRouter dashboard
 # Visit https://openrouter.ai/account
-
-# 4. Ensure key has not expired or been revoked
 ```
+
+**For AgentRouter:**
+```bash
+# 1. Verify .env has AGENTROUTER_API_KEY set
+grep AGENTROUTER_API_KEY .env
+
+# 2. Test API key directly
+curl https://api.agentrouter.ai/v1/models \
+  -H "Authorization: Bearer sk-or-v1-YOUR_KEY_HERE"
+
+# 3. Check AgentRouter dashboard
+# Visit https://agentrouter.ai/account
+```
+
+**General debugging:**
+- Ensure API key format is correct (starts with `sk-or-` for OpenRouter, `sk-or-v1-` for AgentRouter)
+- Verify key has sufficient credits/quota
+- Check that key has not expired or been revoked
+- Check application logs for exact error message
 
 ### Tests fail
 
@@ -661,6 +806,13 @@ For issues, questions, or suggestions:
 - Review code comments and architecture docs
 
 ## Changelog
+
+### Version 0.0.2 (Multi-Provider Support)
+- ✨ Added multi-provider AI support (OpenRouter & AgentRouter)
+- ✨ Provider selection via configuration (no code changes needed)
+- ✨ Automatic provider detection and routing
+- 📝 Updated documentation with provider configuration guide
+- 🔄 Seamless switching between providers without downtime
 
 ### Version 0.0.1-SNAPSHOT (MVP)
 - ✨ Initial MVP with persona generation and feedback simulation

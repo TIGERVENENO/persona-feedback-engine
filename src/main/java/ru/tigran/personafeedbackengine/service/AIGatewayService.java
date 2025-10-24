@@ -16,25 +16,38 @@ public class AIGatewayService {
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
-    private final String apiKey;
-    private final String model;
-    private final long retryDelayMs;
+    private final String provider;
+    private final String openRouterApiKey;
+    private final String openRouterModel;
+    private final long openRouterRetryDelayMs;
+    private final String agentRouterApiKey;
+    private final String agentRouterModel;
+    private final long agentRouterRetryDelayMs;
     private final int maxRetries = 3;
 
     private static final String OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+    private static final String AGENTROUTER_API_URL = "https://api.agentrouter.ai/v1/chat/completions";
 
     public AIGatewayService(
             RestClient restClient,
             ObjectMapper objectMapper,
-            @Value("${app.openrouter.api-key}") String apiKey,
-            @Value("${app.openrouter.model}") String model,
-            @Value("${app.openrouter.retry-delay-ms}") long retryDelayMs
+            @Value("${app.ai.provider}") String provider,
+            @Value("${app.openrouter.api-key}") String openRouterApiKey,
+            @Value("${app.openrouter.model}") String openRouterModel,
+            @Value("${app.openrouter.retry-delay-ms}") long openRouterRetryDelayMs,
+            @Value("${app.agentrouter.api-key}") String agentRouterApiKey,
+            @Value("${app.agentrouter.model}") String agentRouterModel,
+            @Value("${app.agentrouter.retry-delay-ms}") long agentRouterRetryDelayMs
     ) {
         this.restClient = restClient;
         this.objectMapper = objectMapper;
-        this.apiKey = apiKey;
-        this.model = model;
-        this.retryDelayMs = retryDelayMs;
+        this.provider = provider;
+        this.openRouterApiKey = openRouterApiKey;
+        this.openRouterModel = openRouterModel;
+        this.openRouterRetryDelayMs = openRouterRetryDelayMs;
+        this.agentRouterApiKey = agentRouterApiKey;
+        this.agentRouterModel = agentRouterModel;
+        this.agentRouterRetryDelayMs = agentRouterRetryDelayMs;
     }
 
     /**
@@ -69,7 +82,7 @@ public class AIGatewayService {
 
         String userMessage = "Create a persona based on this description: " + userPrompt;
 
-        String response = callOpenRouterAPI(systemPrompt, userMessage);
+        String response = callAIProvider(systemPrompt, userMessage);
         validateJSON(response);
         return response;
     }
@@ -93,22 +106,41 @@ public class AIGatewayService {
                 personaDescription, productDescription
         );
 
-        String response = callOpenRouterAPI(systemPrompt, userMessage);
+        String response = callAIProvider(systemPrompt, userMessage);
         return response.trim();
     }
 
     /**
-     * Calls OpenRouter API with retry logic for 429 (rate limit) errors.
+     * Calls AI Provider API (OpenRouter or AgentRouter) with retry logic for 429 (rate limit) errors.
      */
-    private String callOpenRouterAPI(String systemPrompt, String userMessage) {
+    private String callAIProvider(String systemPrompt, String userMessage) {
+        String apiUrl;
+        String apiKey;
+        String model;
+        long retryDelayMs;
+
+        if ("agentrouter".equalsIgnoreCase(provider)) {
+            apiUrl = AGENTROUTER_API_URL;
+            apiKey = agentRouterApiKey;
+            model = agentRouterModel;
+            retryDelayMs = agentRouterRetryDelayMs;
+            log.debug("Using AgentRouter provider");
+        } else {
+            apiUrl = OPENROUTER_API_URL;
+            apiKey = openRouterApiKey;
+            model = openRouterModel;
+            retryDelayMs = openRouterRetryDelayMs;
+            log.debug("Using OpenRouter provider");
+        }
+
         int attempt = 0;
         while (attempt < maxRetries) {
             try {
-                log.debug("Calling OpenRouter API, attempt {}", attempt + 1);
-                String requestBody = buildRequestBody(systemPrompt, userMessage);
+                log.debug("Calling {} API, attempt {}", provider, attempt + 1);
+                String requestBody = buildRequestBody(systemPrompt, userMessage, model);
 
                 String response = restClient.post()
-                        .uri(OPENROUTER_API_URL)
+                        .uri(apiUrl)
                         .header("Authorization", "Bearer " + apiKey)
                         .header("Content-Type", "application/json")
                         .body(requestBody)
@@ -117,10 +149,10 @@ public class AIGatewayService {
                             int statusCode = response1.getStatusCode().value();
                             if (statusCode == 429) {
                                 log.warn("Rate limited (429), will retry");
-                                throw new RateLimitedException("Rate limited by OpenRouter");
+                                throw new RateLimitedException("Rate limited by " + provider);
                             }
-                            log.error("OpenRouter API error: {} {}", statusCode, response1.getStatusText());
-                            throw new AIGatewayException("OpenRouter API error: " + statusCode, "AI_SERVICE_ERROR");
+                            log.error("{} API error: {} {}", provider, statusCode, response1.getStatusText());
+                            throw new AIGatewayException(provider + " API error: " + statusCode, "AI_SERVICE_ERROR");
                         })
                         .body(String.class);
 
@@ -140,17 +172,17 @@ public class AIGatewayService {
                     throw new AIGatewayException("Interrupted during retry", "AI_SERVICE_ERROR", ie);
                 }
             } catch (Exception e) {
-                log.error("Error calling OpenRouter API", e);
-                throw new AIGatewayException("Failed to call OpenRouter API: " + e.getMessage(), "AI_SERVICE_ERROR", e);
+                log.error("Error calling {} API", provider, e);
+                throw new AIGatewayException("Failed to call " + provider + " API: " + e.getMessage(), "AI_SERVICE_ERROR", e);
             }
         }
         throw new AIGatewayException("Failed after max retries", "AI_SERVICE_ERROR");
     }
 
     /**
-     * Builds the OpenRouter API request body.
+     * Builds the AI Provider API request body (OpenRouter or AgentRouter).
      */
-    private String buildRequestBody(String systemPrompt, String userMessage) {
+    private String buildRequestBody(String systemPrompt, String userMessage, String model) {
         try {
             var rootNode = objectMapper.createObjectNode();
             rootNode.put("model", model);
