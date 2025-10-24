@@ -5,9 +5,10 @@
 ## Обзор
 
 Persona Feedback Engine позволяет маркетологам:
-1. **Генерировать AI-персоны** - Создавать детальные, реалистичные профили клиентов с помощью Claude AI через OpenRouter
+1. **Генерировать AI-персоны** - Создавать детальные, реалистичные профили клиентов с помощью любой LLM модели
 2. **Симулировать отзывы** - Получать отзывы о продуктах от нескольких персон одновременно
 3. **Управлять сессиями** - Отслеживать прогресс генерации и получать результаты
+4. **Выбирать провайдера и модель** - Переключаться между провайдерами (OpenRouter, AgentRouter) и моделями без изменений кода
 
 Система использует двухэтапный асинхронный workflow:
 - **Этап 1**: Тяжелая генерация персон (кэшируется по промпту)
@@ -27,8 +28,9 @@ cd persona-feedback-engine
 # 2. Создайте конфигурацию из шаблона
 cp .env.example .env
 
-# 3. Отредактируйте .env и установите ваш OpenRouter API ключ
-#    OPENROUTER_API_KEY=your_key_here
+# 3. Отредактируйте .env и установите API ключ выбранного провайдера
+#    AGENTROUTER_API_KEY=your_key_here (для AgentRouter)
+#    или OPENROUTER_API_KEY=your_key_here (для OpenRouter)
 
 # 4. Запустите инфраструктуру (PostgreSQL, Redis, RabbitMQ)
 docker-compose up -d
@@ -55,7 +57,9 @@ docker-compose ps
 - **Java 21** - [Скачать JDK 21](https://www.oracle.com/java/technologies/javase/jdk21-archive-downloads.html)
 - **Maven 3.8+** - [Скачать Maven](https://maven.apache.org/download.cgi)
 - **Docker Desktop** - [Скачать Docker](https://www.docker.com/products/docker-desktop/)
-- **OpenRouter API Key** - [Получить бесплатные кредиты](https://openrouter.ai/keys)
+- **API ключ провайдера** - Выберите один из:
+  - **OpenRouter** - [Получить бесплатные кредиты](https://openrouter.ai/keys)
+  - **AgentRouter** - [Получить бесплатные кредиты](https://agentrouter.ai/keys)
 
 ### Опциональные
 
@@ -72,12 +76,16 @@ docker-compose ps
 cp .env.example .env
 
 # Отредактируйте .env с вашими учетными данными
-# Самое важное: установите OPENROUTER_API_KEY
+# Самое важное: установите API_PROVIDER и соответствующий ключ
 nano .env  # или ваш предпочитаемый редактор
 ```
 
 **Ключевые переменные окружения:**
-- `OPENROUTER_API_KEY` - Ваш OpenRouter API ключ (обязателен для AI функций)
+- `AI_PROVIDER` - Какой провайдер использовать: `openrouter` или `agentrouter` (по умолчанию: `agentrouter`)
+- `OPENROUTER_API_KEY` - Ваш OpenRouter API ключ (обязателен если используете OpenRouter)
+- `AGENTROUTER_API_KEY` - Ваш AgentRouter API ключ (обязателен если используете AgentRouter)
+- `OPENROUTER_MODEL` - Модель для OpenRouter (по умолчанию: anthropic/claude-3-5-sonnet)
+- `AGENTROUTER_MODEL` - Модель для AgentRouter (по умолчанию: anthropic/claude-3-5-sonnet)
 - `POSTGRES_PASSWORD` - Пароль базы данных (по умолчанию: postgres)
 - `REDIS_PASSWORD` - Пароль Redis (по умолчанию: redispass)
 - `RABBITMQ_PASSWORD` - Пароль RabbitMQ (по умолчанию: guest)
@@ -150,6 +158,116 @@ curl http://localhost:8080/actuator/health
 # Ожидаемый ответ:
 # {"status":"UP"}
 ```
+
+## Гайд по конфигурации провайдера и модели
+
+Система поддерживает несколько провайдеров и моделей ИИ. Вы можете переключаться между ними без изменения кода.
+
+### Поддерживаемые провайдеры
+
+| Провайдер | Формат ключа | URL | Описание |
+|----------|---|---|---|
+| **OpenRouter** | `sk-or-...` | https://openrouter.ai/api/v1/chat/completions | Доступ ко многим моделям, оплата по использованию |
+| **AgentRouter** | `sk-or-v1-...` | https://api.agentrouter.ai/v1/chat/completions | Оптимизированная маршрутизация, конкурентные цены |
+
+### Доступные модели
+
+Оба провайдера поддерживают множество LLM моделей. Примеры:
+
+**Anthropic (Claude):**
+- `anthropic/claude-3-5-sonnet` - Высокая производительность, отлично для сложных задач
+- `anthropic/claude-3-5-haiku` - Быстрая, легковесная, дешевле
+- `anthropic/claude-3-opus` - Максимальные возможности
+
+**OpenAI:**
+- `openai/gpt-4-turbo` - Продвинутое рассуждение и анализ
+- `openai/gpt-4o` - Мультимодальные возможности
+- `openai/gpt-3.5-turbo` - Быстрая и экономичная
+
+**Другие провайдеры:**
+- `mistral/mistral-large` - Быстрая открытая модель
+- `meta-llama/llama-2-70b-chat` - Открытая альтернатива
+- И много других доступно через OpenRouter/AgentRouter
+
+Смотрите [OpenRouter Models](https://openrouter.ai/docs#models) или [AgentRouter Models](https://agentrouter.ai/docs#models) для полного списка.
+
+### Как переключаться между провайдерами и моделями
+
+#### Вариант 1: Переменные окружения (Рекомендуется)
+
+Отредактируйте файл `.env`:
+
+```bash
+# Выберите провайдера
+AI_PROVIDER=agentrouter
+
+# Установите модель для каждого провайдера
+OPENROUTER_MODEL=anthropic/claude-3-5-sonnet
+AGENTROUTER_MODEL=anthropic/claude-3-5-sonnet
+
+# Установите учетные данные
+AGENTROUTER_API_KEY=sk-or-v1-your-agentrouter-key-here
+OPENROUTER_API_KEY=sk-or-your-openrouter-key-here  # опционально если не используете OpenRouter
+```
+
+Затем перезагрузите приложение.
+
+#### Вариант 2: Прямое редактирование файла конфигурации
+
+Отредактируйте `src/main/resources/application.properties`:
+
+```properties
+# ======== Конфигурация AI провайдера ========
+app.ai.provider=agentrouter
+
+# ======== Конфигурация OpenRouter ========
+app.openrouter.api-key=sk-or-YOUR_OPENROUTER_API_KEY_HERE
+app.openrouter.model=anthropic/claude-3-5-sonnet
+app.openrouter.retry-delay-ms=1000
+
+# ======== Конфигурация AgentRouter ========
+app.agentrouter.api-key=sk-or-v1-YOUR_AGENTROUTER_API_KEY_HERE
+app.agentrouter.model=anthropic/claude-3-5-sonnet
+app.agentrouter.retry-delay-ms=1000
+```
+
+### Сравнение провайдеров
+
+**Когда использовать OpenRouter:**
+- Нужен доступ к большому разнообразию моделей
+- Хотите сравнивать разные провайдеры ИИ
+- Разрабатываете провайдер-агностичные приложения
+
+**Когда использовать AgentRouter:**
+- Нужна оптимизированная маршрутизация и балансировка нагрузки
+- Нужна стабильная производительность
+- Предпочитаете конкурентные цены
+
+### Совместимость API
+
+Оба провайдера используют одинаковый OpenAI-совместимый формат API, поэтому переключение безопасно:
+
+```json
+{
+  "model": "<ВАШ_ВЫБРАННЫЙ_MODEL>",
+  "messages": [
+    {
+      "role": "system",
+      "content": "Ваш системный промпт"
+    },
+    {
+      "role": "user",
+      "content": "Ваше сообщение"
+    }
+  ]
+}
+```
+
+Например, если вы установите `app.agentrouter.model=openai/gpt-4o`, API будет использовать GPT-4o. Если установить `anthropic/claude-3-5-sonnet`, будет использоваться Claude. Вы можете менять это в конфигурации в любой момент.
+
+`AIGatewayService` автоматически обрабатывает детали провайдера (URLs, аутентификация, retry логика, выбор модели) на основе вашей конфигурации.
+
+---
 
 ## API Endpoints
 
