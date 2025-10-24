@@ -20,11 +20,13 @@ Spring configuration beans for RabbitMQ, Redis caching, HTTP clients, and other 
 
 ### RestClientConfig
 - Configures HTTP timeout: 30 seconds
-- Used by AIGatewayService for OpenRouter API calls
+- Used by AIGatewayService for AI provider API calls (OpenRouter, AgentRouter)
 - Implements retry logic for 429 errors
 
 ## Configuration Properties
 Referenced from `application.properties`:
 - `spring.rabbitmq.*` - RabbitMQ connection
 - `spring.data.redis.*` - Redis connection
-- `app.openrouter.*` - OpenRouter API settings
+- `app.ai.provider` - Selected AI provider ("openrouter" or "agentrouter")
+- `app.openrouter.*` - OpenRouter API settings (api-key, model, timeout, retry-delay)
+- `app.agentrouter.*` - AgentRouter API settings (api-key, model, timeout, retry-delay)
