@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.amqp.requeue.AmqpRejectAndDontRequeueException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.tigran.personafeedbackengine.config.RabbitMQConfig;
@@ -104,10 +103,6 @@ public class PersonaTaskConsumer {
             } catch (Exception innerE) {
                 log.error("Failed to mark persona as FAILED", innerE);
             }
-
-            throw new AmqpRejectAndDontRequeueException(
-                "Failed to process persona generation task for persona " + task.personaId(), e
-            );
         }
     }
 
