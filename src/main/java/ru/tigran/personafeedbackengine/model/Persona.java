@@ -2,17 +2,23 @@ package ru.tigran.personafeedbackengine.model;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 @Entity
 @Table(name = "personas", indexes = {
     @Index(name = "idx_persona_user_deleted", columnList = "user_id,deleted"),
     @Index(name = "idx_persona_status", columnList = "status")
 })
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(of = "id")
+@ToString(exclude = "user")
 public class Persona extends AuditableEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
