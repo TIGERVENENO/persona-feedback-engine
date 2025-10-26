@@ -26,6 +26,8 @@ Spring Data JPA repositories for database access.
 - Extends `JpaRepository<FeedbackSession, Long>`
 - Custom methods:
   - `findByUserIdAndId(Long userId, Long sessionId)` - Ownership check
+  - `findByIdForUpdate(Long sessionId)` - Fetch with PESSIMISTIC_WRITE lock (prevents race conditions)
+  - `updateStatusIfNotAlready(Long sessionId, FeedbackSessionStatus status)` - Atomic UPDATE (only if status changed)
 
 ### FeedbackResultRepository
 - Extends `JpaRepository<FeedbackResult, Long>`
