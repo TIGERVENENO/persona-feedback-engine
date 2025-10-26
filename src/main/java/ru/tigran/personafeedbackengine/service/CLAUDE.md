@@ -56,6 +56,41 @@ Business logic and orchestration layer for the application.
 - Compensating actions executed in reverse order if any operation fails
 - Useful for complex multi-step operations where atomicity across services is needed
 
+### PersonaGenerationService
+- **Responsibility**: Core persona generation business logic
+- Extracted from PersonaTaskConsumer to follow Single Responsibility Principle
+- Called by PersonaTaskConsumer to handle the actual generation workflow
+- **Methods:**
+  - `generatePersona(PersonaGenerationTask task)`: Orchestrates persona generation
+    1. Fetch Persona entity and validate state (idempotency check)
+    2. Call AIGatewayService to generate details
+    3. Parse and validate JSON response
+    4. Update Persona entity with generated details
+    5. Persist changes to database
+- **Private methods:**
+  - `parsePersonaDetails(String json)`: Parses JSON response from AI
+  - `validatePersonaDetails(JsonNode details)`: Validates required fields (nm, dd, g, ag, r, au)
+  - `updatePersonaEntity(Persona persona, JsonNode details)`: Maps JSON fields to entity properties
+
+### FeedbackGenerationService
+- **Responsibility**: Core feedback generation business logic and session completion
+- Extracted from FeedbackTaskConsumer to follow Single Responsibility Principle
+- Called by FeedbackTaskConsumer to handle the actual generation workflow
+- Uses Redisson distributed locking for safe session status updates across instances
+- **Methods:**
+  - `generateFeedback(FeedbackGenerationTask task)`: Orchestrates feedback generation
+    1. Fetch FeedbackResult, Persona, Product entities
+    2. Check idempotency (skip if COMPLETED)
+    3. Mark result as IN_PROGRESS
+    4. Call AIGatewayService to generate feedback
+    5. Update FeedbackResult with generated text
+    6. Check and update session completion status
+  - `checkAndUpdateSessionCompletion(Long sessionId)`: Atomically updates session status
+    - Uses distributed lock (Redisson) with 10-second timeout
+    - Checks if all results for session are done (completed + failed >= total)
+    - Updates session status to COMPLETED if all results done
+    - Handles InterruptedException and general exceptions
+
 ## Responsibilities
 - Input validation and ownership checks
 - Entity creation and state management
@@ -63,3 +98,6 @@ Business logic and orchestration layer for the application.
 - Ownership-based data access control
 - Duplicate request prevention (idempotency)
 - Distributed transaction management (Saga pattern)
+- AI-driven generation logic (PersonaGenerationService, FeedbackGenerationService)
+- JSON parsing and validation
+- Distributed locking for atomic operations
