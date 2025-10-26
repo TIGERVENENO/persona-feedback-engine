@@ -55,7 +55,6 @@ public class PersonaTaskConsumer {
             // Parse the JSON response
             JsonNode details = objectMapper.readTree(personaDetailsJson);
 
-            // ✅ Валидация обязательных полей перед парсингом
             validatePersonaDetails(details);
 
             // Update Persona entity with generated details
@@ -64,7 +63,6 @@ public class PersonaTaskConsumer {
             persona.setGender(details.get("g").asText());
             persona.setAgeGroup(details.get("ag").asText());
             persona.setRace(details.get("r").asText());
-            // ✅ Безопасное обращение к опциональному полю
             persona.setAvatarUrl(details.has("au") ? details.get("au").asText("") : "");
             persona.setStatus(Persona.PersonaStatus.ACTIVE);
 
