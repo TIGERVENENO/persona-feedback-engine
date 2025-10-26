@@ -12,6 +12,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 import ru.tigran.personafeedbackengine.exception.AIGatewayException;
+import ru.tigran.personafeedbackengine.exception.ErrorCode;
+import ru.tigran.personafeedbackengine.exception.RetriableHttpException;
 
 import java.time.Duration;
 
@@ -160,36 +162,86 @@ public class AIGatewayService {
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, (request, response1) -> {
                             int statusCode = response1.getStatusCode().value();
-                            if (statusCode == 429) {
-                                log.warn("Rate limited (429), will retry");
-                                throw new RateLimitedException("Rate limited by " + provider);
+
+                            // Check for retriable errors: 429, 502, 503, 504
+                            if (statusCode == 429 || statusCode == 502 || statusCode == 503 || statusCode == 504) {
+                                log.warn("Retriable HTTP error {} from {}, will retry", statusCode, provider);
+                                throw new RetriableHttpException(
+                                    statusCode,
+                                    String.format("Retriable error from %s: %d %s", provider, statusCode, response1.getStatusText())
+                                );
                             }
+
+                            // Non-retriable errors (401, 403, 400, etc.)
                             log.error("{} API error: {} {}", provider, statusCode, response1.getStatusText());
-                            throw new AIGatewayException(provider + " API error: " + statusCode, "AI_SERVICE_ERROR");
+                            throw new AIGatewayException(
+                                provider + " API error: " + statusCode,
+                                ErrorCode.AI_SERVICE_ERROR.getCode(),
+                                false  // Non-retriable
+                            );
                         })
                         .body(String.class);
 
                 return extractMessageContent(response);
 
-            } catch (RateLimitedException e) {
+            } catch (RetriableHttpException e) {
                 attempt++;
                 if (attempt >= maxRetries) {
-                    throw new AIGatewayException("Max retries exceeded for rate limit", "AI_SERVICE_ERROR", e);
+                    throw new AIGatewayException(
+                        "Max retries exceeded for retriable HTTP error: " + e.getStatusCode(),
+                        ErrorCode.AI_SERVICE_ERROR.getCode(),
+                        true,  // Retriable
+                        e
+                    );
                 }
                 try {
                     long backoffMs = retryDelayMs * (long) Math.pow(2, attempt - 1);
-                    log.info("Retrying after {} ms", backoffMs);
+                    log.info("Retrying after {} ms (attempt {}/{})", backoffMs, attempt, maxRetries);
                     Thread.sleep(backoffMs);
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
-                    throw new AIGatewayException("Interrupted during retry", "AI_SERVICE_ERROR", ie);
+                    throw new AIGatewayException(
+                        "Interrupted during retry",
+                        ErrorCode.AI_SERVICE_ERROR.getCode(),
+                        false,  // Non-retriable since it's an interrupt
+                        ie
+                    );
+                }
+            } catch (RateLimitedException e) {
+                // Legacy support for RateLimitedException
+                attempt++;
+                if (attempt >= maxRetries) {
+                    throw new AIGatewayException(
+                        "Max retries exceeded for rate limit",
+                        ErrorCode.AI_SERVICE_ERROR.getCode(),
+                        true,  // Retriable
+                        e
+                    );
+                }
+                try {
+                    long backoffMs = retryDelayMs * (long) Math.pow(2, attempt - 1);
+                    log.info("Retrying after {} ms (attempt {}/{})", backoffMs, attempt, maxRetries);
+                    Thread.sleep(backoffMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new AIGatewayException(
+                        "Interrupted during retry",
+                        ErrorCode.AI_SERVICE_ERROR.getCode(),
+                        false,
+                        ie
+                    );
                 }
             } catch (Exception e) {
                 log.error("Error calling {} API", provider, e);
-                throw new AIGatewayException("Failed to call " + provider + " API: " + e.getMessage(), "AI_SERVICE_ERROR", e);
+                throw new AIGatewayException(
+                    "Failed to call " + provider + " API: " + e.getMessage(),
+                    ErrorCode.AI_SERVICE_ERROR.getCode(),
+                    false,  // Non-retriable unexpected errors
+                    e
+                );
             }
         }
-        throw new AIGatewayException("Failed after max retries", "AI_SERVICE_ERROR");
+        throw new AIGatewayException("Failed after max retries", ErrorCode.AI_SERVICE_ERROR.getCode(), true);
     }
 
     /**
@@ -214,7 +266,12 @@ public class AIGatewayService {
 
             return objectMapper.writeValueAsString(rootNode);
         } catch (Exception e) {
-            throw new AIGatewayException("Failed to build request body", "AI_SERVICE_ERROR", e);
+            throw new AIGatewayException(
+                "Failed to build request body",
+                ErrorCode.AI_SERVICE_ERROR.getCode(),
+                false,
+                e
+            );
         }
     }
 
@@ -228,13 +285,22 @@ public class AIGatewayService {
 
             // Check if the path exists and is not missing or null
             if (content == null || content.isNull() || content.isMissingNode()) {
-                throw new AIGatewayException("Missing content in API response", "AI_SERVICE_ERROR");
+                throw new AIGatewayException(
+                    "Missing content in API response",
+                    ErrorCode.AI_SERVICE_ERROR.getCode(),
+                    false
+                );
             }
             return content.asText();
         } catch (AIGatewayException e) {
             throw e;
         } catch (Exception e) {
-            throw new AIGatewayException("Failed to parse API response: " + e.getMessage(), "AI_SERVICE_ERROR", e);
+            throw new AIGatewayException(
+                "Failed to parse API response: " + e.getMessage(),
+                ErrorCode.AI_SERVICE_ERROR.getCode(),
+                false,
+                e
+            );
         }
     }
 
@@ -245,7 +311,12 @@ public class AIGatewayService {
         try {
             objectMapper.readTree(json);
         } catch (Exception e) {
-            throw new AIGatewayException("Invalid JSON in response: " + e.getMessage(), "AI_SERVICE_ERROR", e);
+            throw new AIGatewayException(
+                "Invalid JSON in response: " + e.getMessage(),
+                ErrorCode.AI_SERVICE_ERROR.getCode(),
+                false,
+                e
+            );
         }
     }
 

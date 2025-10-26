@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.tigran.personafeedbackengine.dto.PersonaGenerationTask;
 import ru.tigran.personafeedbackengine.exception.AIGatewayException;
+import ru.tigran.personafeedbackengine.exception.ErrorCode;
 import ru.tigran.personafeedbackengine.exception.ResourceNotFoundException;
 import ru.tigran.personafeedbackengine.model.Persona;
 import ru.tigran.personafeedbackengine.repository.PersonaRepository;
@@ -49,7 +50,7 @@ public class PersonaGenerationService {
         Persona persona = personaRepository.findById(task.personaId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Persona not found",
-                        "PERSONA_NOT_FOUND"
+                        ErrorCode.PERSONA_NOT_FOUND.getCode()
                 ));
 
         // Check idempotency
@@ -97,7 +98,7 @@ public class PersonaGenerationService {
         } catch (Exception e) {
             String message = "Failed to parse persona generation response: " + e.getMessage();
             log.error(message);
-            throw new AIGatewayException(message, "INVALID_JSON_RESPONSE");
+            throw new AIGatewayException(message, ErrorCode.INVALID_JSON_RESPONSE.getCode());
         }
     }
 
@@ -130,7 +131,7 @@ public class PersonaGenerationService {
                 log.error("Persona validation failed: {}", message);
                 throw new AIGatewayException(
                     message,
-                    "INVALID_AI_RESPONSE"
+                    ErrorCode.INVALID_AI_RESPONSE.getCode()
                 );
             }
         }

@@ -2,8 +2,11 @@ package ru.tigran.personafeedbackengine.model;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 @Entity
 @Table(name = "feedback_results", indexes = {
@@ -11,9 +14,12 @@ import lombok.NoArgsConstructor;
     @Index(name = "idx_feedback_result_product_persona", columnList = "product_id, persona_id"),
     @Index(name = "idx_feedback_result_status", columnList = "status")
 })
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(of = "id")
+@ToString(exclude = {"feedbackSession", "product", "persona"})
 public class FeedbackResult extends AuditableEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

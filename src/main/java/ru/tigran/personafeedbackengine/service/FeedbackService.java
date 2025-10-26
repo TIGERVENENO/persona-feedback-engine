@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.tigran.personafeedbackengine.config.RabbitMQConfig;
 import ru.tigran.personafeedbackengine.dto.FeedbackSessionRequest;
 import ru.tigran.personafeedbackengine.dto.FeedbackGenerationTask;
+import ru.tigran.personafeedbackengine.exception.ErrorCode;
 import ru.tigran.personafeedbackengine.exception.UnauthorizedException;
 import ru.tigran.personafeedbackengine.exception.ValidationException;
 import ru.tigran.personafeedbackengine.model.FeedbackResult;
@@ -190,7 +191,7 @@ public class FeedbackService {
                 statusDetails
             );
             log.warn("Persona readiness validation failed: {}", message);
-            throw new ValidationException(message, "PERSONAS_NOT_READY");
+            throw new ValidationException(message, ErrorCode.PERSONAS_NOT_READY.getCode());
         }
 
         log.debug("All {} personas are ready for feedback generation", personas.size());

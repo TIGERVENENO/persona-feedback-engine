@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.tigran.personafeedbackengine.config.RabbitMQConfig;
 import ru.tigran.personafeedbackengine.dto.PersonaGenerationRequest;
 import ru.tigran.personafeedbackengine.dto.PersonaGenerationTask;
+import ru.tigran.personafeedbackengine.exception.ErrorCode;
 import ru.tigran.personafeedbackengine.exception.ValidationException;
 import ru.tigran.personafeedbackengine.model.Persona;
 import ru.tigran.personafeedbackengine.model.User;
@@ -66,12 +67,12 @@ public class PersonaService {
         if (request.prompt().length() > maxPromptLength) {
             throw new ValidationException(
                     "Prompt exceeds maximum length of " + maxPromptLength + " characters",
-                    "INVALID_PROMPT_LENGTH"
+                    ErrorCode.INVALID_PROMPT_LENGTH.getCode()
             );
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ValidationException("User not found", "USER_NOT_FOUND"));
+                .orElseThrow(() -> new ValidationException("User not found", ErrorCode.USER_NOT_FOUND.getCode()));
 
         Persona persona = new Persona();
         persona.setUser(user);

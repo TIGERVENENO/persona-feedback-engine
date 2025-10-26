@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.tigran.personafeedbackengine.dto.FeedbackGenerationTask;
 import ru.tigran.personafeedbackengine.dto.SessionStatusInfo;
+import ru.tigran.personafeedbackengine.exception.ErrorCode;
 import ru.tigran.personafeedbackengine.exception.ResourceNotFoundException;
 import ru.tigran.personafeedbackengine.model.FeedbackResult;
 import ru.tigran.personafeedbackengine.model.FeedbackSession;
@@ -67,7 +68,7 @@ public class FeedbackGenerationService {
         FeedbackResult result = feedbackResultRepository.findById(task.resultId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "FeedbackResult not found",
-                        "FEEDBACK_RESULT_NOT_FOUND"
+                        ErrorCode.FEEDBACK_RESULT_NOT_FOUND.getCode()
                 ));
 
         // Check idempotency
@@ -88,13 +89,13 @@ public class FeedbackGenerationService {
         Persona persona = personaRepository.findById(task.personaId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Persona not found",
-                        "PERSONA_NOT_FOUND"
+                        ErrorCode.PERSONA_NOT_FOUND.getCode()
                 ));
 
         Product product = productRepository.findById(task.productId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Product not found",
-                        "PRODUCT_NOT_FOUND"
+                        ErrorCode.PRODUCT_NOT_FOUND.getCode()
                 ));
 
         // Generate feedback via AI

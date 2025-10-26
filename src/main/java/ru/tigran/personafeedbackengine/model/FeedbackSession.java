@@ -2,8 +2,11 @@ package ru.tigran.personafeedbackengine.model;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -13,9 +16,12 @@ import java.util.List;
     @Index(name = "idx_feedback_session_user", columnList = "user_id"),
     @Index(name = "idx_feedback_session_status", columnList = "status")
 })
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(of = "id")
+@ToString(exclude = {"user", "feedbackResults"})
 public class FeedbackSession extends AuditableEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
