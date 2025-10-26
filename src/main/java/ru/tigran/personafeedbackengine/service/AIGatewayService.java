@@ -332,9 +332,8 @@ public class AIGatewayService {
                 .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
                 .bodyValue(requestBody)
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, response -> {
-                    int statusCode = response.getStatusCode().value();
+                .exchangeToMono(clientResponse -> {
+                    int statusCode = clientResponse.statusCode().value();
 
                     // Определяем, является ли ошибка retriable
                     if (statusCode == 429 || statusCode == 502 || statusCode == 503 || statusCode == 504) {
@@ -343,10 +342,14 @@ public class AIGatewayService {
                     }
 
                     // Non-retriable ошибки
-                    log.error("{} API error: {} {}", provider, statusCode, response.getStatusText());
-                    return Mono.error(new AIGatewayException(provider + " API error: " + statusCode, "AI_SERVICE_ERROR"));
+                    if (statusCode >= 400) {
+                        log.error("{} API error: {}", provider, statusCode);
+                        return Mono.error(new AIGatewayException(provider + " API error: " + statusCode, "AI_SERVICE_ERROR"));
+                    }
+
+                    // Успешный ответ
+                    return clientResponse.bodyToMono(String.class);
                 })
-                .bodyToMono(String.class)
                 .timeout(Duration.ofSeconds(30))
                 .retryWhen(Retry.backoff(maxRetries, Duration.ofMillis(100))
                         .filter(throwable -> throwable instanceof RetriableAIException)
