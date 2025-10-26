@@ -1,5 +1,12 @@
 package ru.tigran.personafeedbackengine.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -16,6 +23,8 @@ import ru.tigran.personafeedbackengine.service.PersonaService;
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/personas")
+@Tag(name = "Personas", description = "Генерация и управление AI персонами")
+@SecurityRequirement(name = "bearer-jwt")
 public class PersonaController {
 
     private final PersonaService personaService;
@@ -34,6 +43,27 @@ public class PersonaController {
      * @return JobResponse with persona ID and initial status
      */
     @PostMapping
+    @Operation(
+            summary = "Создать новую персону",
+            description = "Запускает асинхронный процесс генерации AI персоны по указанному описанию. " +
+                    "Генерация происходит в фоне через message queue. " +
+                    "Детали персоны будут доступны после завершения обработки."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "202",
+                    description = "Задача генерации персоны принята",
+                    content = @Content(schema = @Schema(implementation = JobResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Неверные параметры запроса (пустой prompt или слишком длинный)"
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Отсутствует JWT токен в заголовке Authorization"
+            )
+    })
     public ResponseEntity<JobResponse> generatePersona(
             @Valid @RequestBody PersonaGenerationRequest request
     ) {

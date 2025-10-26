@@ -1,5 +1,13 @@
 package ru.tigran.personafeedbackengine.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -22,6 +30,8 @@ import ru.tigran.personafeedbackengine.service.FeedbackQueryService;
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/feedback-sessions")
+@Tag(name = "Feedback Sessions", description = "Управление сессиями сбора фидбека на продукты")
+@SecurityRequirement(name = "bearer-jwt")
 public class FeedbackController {
 
     private final FeedbackService feedbackService;
@@ -46,6 +56,31 @@ public class FeedbackController {
      * @return JobResponse with session ID and initial status
      */
     @PostMapping
+    @Operation(
+            summary = "Запустить сессию сбора фидбека",
+            description = "Создает сессию для генерации фидбека от персон на указанные продукты. " +
+                    "Генерация происходит асинхронно через message queue. " +
+                    "Фидбек будет доступен для получения через GET endpoint после завершения."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "202",
+                    description = "Сессия фидбека создана и обработка запущена",
+                    content = @Content(schema = @Schema(implementation = JobResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Неверные параметры (пустые lists, превышены лимиты, недопустимые IDs)"
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Отсутствует JWT токен в заголовке Authorization"
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Пользователь не владеет указанными продуктами или персонами"
+            )
+    })
     public ResponseEntity<JobResponse> startFeedbackSession(
             @Valid @RequestBody FeedbackSessionRequest request
     ) {
@@ -78,10 +113,41 @@ public class FeedbackController {
      * @return FeedbackSessionResponse with status and feedback results
      */
     @GetMapping("/{sessionId}")
+    @Operation(
+            summary = "Получить статус и результаты сессии фидбека",
+            description = "Возвращает текущий статус сессии и список собранных фидбеков. " +
+                    "Поддерживает опциональную pagination через query параметры page и size. " +
+                    "Если page и size не указаны, возвращаются все результаты (кешируются)."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Успешный ответ со статусом и результатами",
+                    content = @Content(schema = @Schema(implementation = FeedbackSessionResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Отсутствует JWT токен в заголовке Authorization"
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Пользователь не владеет этой сессией"
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Сессия с указанным ID не найдена"
+            )
+    })
     public ResponseEntity<FeedbackSessionResponse> getFeedbackSession(
-            @PathVariable Long sessionId,
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size
+            @PathVariable
+            @Parameter(description = "ID сессии фидбека", example = "123")
+            Long sessionId,
+            @RequestParam(required = false)
+            @Parameter(description = "Номер страницы (0-based), опционально", example = "0")
+            Integer page,
+            @RequestParam(required = false)
+            @Parameter(description = "Размер страницы, опционально", example = "10")
+            Integer size
     ) {
         // Extract user ID from JWT token stored in SecurityContext
         Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
