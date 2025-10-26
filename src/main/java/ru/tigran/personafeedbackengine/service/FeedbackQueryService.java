@@ -3,6 +3,9 @@ package ru.tigran.personafeedbackengine.service;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.tigran.personafeedbackengine.dto.FeedbackResultDTO;
@@ -52,6 +55,46 @@ public class FeedbackQueryService {
         List<FeedbackResult> results = feedbackResultRepository.findByFeedbackSessionIdWithDetails(sessionId);
 
         List<FeedbackResultDTO> resultDTOs = results.stream()
+                .map(result -> new FeedbackResultDTO(
+                        result.getId(),
+                        result.getFeedbackText(),
+                        result.getStatus().name(),
+                        result.getPersona().getId(),
+                        result.getProduct().getId()
+                ))
+                .toList();
+
+        return new FeedbackSessionResponse(
+                session.getId(),
+                session.getStatus().name(),
+                session.getCreatedAt(),
+                resultDTOs
+        );
+    }
+
+    /**
+     * Retrieves paginated feedback results for a session.
+     *
+     * @param userId User ID for ownership validation
+     * @param sessionId Session ID
+     * @param page Page number (0-based)
+     * @param size Page size
+     * @return Page of FeedbackResultDTOs
+     */
+    @Transactional(readOnly = true)
+    public FeedbackSessionResponse getFeedbackSessionPaginated(Long userId, Long sessionId, int page, int size) {
+        log.debug("Fetching paginated feedback session {} for user {} (page={}, size={})", sessionId, userId, page, size);
+
+        FeedbackSession session = feedbackSessionRepository.findByUserIdAndId(userId, sessionId)
+                .orElseThrow(() -> new UnauthorizedException(
+                        "Feedback session not found or does not belong to this user",
+                        "UNAUTHORIZED_ACCESS"
+                ));
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<FeedbackResult> resultsPage = feedbackResultRepository.findByFeedbackSessionId(sessionId, pageable);
+
+        List<FeedbackResultDTO> resultDTOs = resultsPage.getContent().stream()
                 .map(result -> new FeedbackResultDTO(
                         result.getId(),
                         result.getFeedbackText(),
