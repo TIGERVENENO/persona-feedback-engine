@@ -46,6 +46,33 @@ Includes startup validators to ensure critical configuration is present.
 - Timeout: 10 seconds for lock acquisition
 - Enables horizontal scaling with synchronized state updates
 
+### Resilience4jConfig
+- Configures circuit breaker for AI provider API protection
+- Opens after 5 failures within 30 seconds (50% failure rate threshold)
+- Remains open for 20 seconds, then attempts half-open state
+- Records AIGatewayException and general Exceptions
+- Ignores IllegalArgumentException
+
+### ThreadPoolConfig
+- Configures separate thread pools for bulkhead pattern
+- `personaGenerationExecutor`: 3-10 threads, 50-task queue (prevents persona tasks from blocking feedback)
+- `feedbackGenerationExecutor`: 5-20 threads, 100-task queue
+- Enables @Async support with graceful shutdown
+
+### HealthCheckConfig
+- Provides health indicators for external dependencies
+- `aiProviderHealthIndicator`: Checks AI provider availability
+- `rabbitMQHealthIndicator`: RabbitMQ status
+- `redisHealthIndicator`: Redis status
+- Exposed via `/actuator/health`
+
+### WebConfig
+- CORS configuration for frontend integration
+- Allowed origins configurable via `cors.allowed-origins`
+- Supports credentials, preflight caching (1 hour)
+- Exposes custom headers: X-Total-Count, X-Page-Number, X-Page-Size
+- Request/response logging filter with duration tracking
+
 ## Configuration Properties
 Referenced from `application.properties`:
 - `spring.rabbitmq.*` - RabbitMQ connection

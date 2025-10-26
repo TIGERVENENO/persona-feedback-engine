@@ -44,8 +44,22 @@ Business logic and orchestration layer for the application.
 - `startFeedbackSession(FeedbackSessionRequest request)`: Creates FeedbackSession + FeedbackResult entities and publishes FeedbackGenerationTasks
 - Validates request ownership, product/persona existence, and constraints
 
+### IdempotencyService
+- Protects against duplicate requests using idempotency keys
+- Stores idempotency keys in Redis with 5-minute TTL
+- First request with unique key succeeds, subsequent duplicates are rejected
+- Used to prevent accidental double-submission of operations
+
+### SagaService
+- Implements Saga pattern for distributed transactions
+- Executes series of operations with automatic rollback on failure
+- Compensating actions executed in reverse order if any operation fails
+- Useful for complex multi-step operations where atomicity across services is needed
+
 ## Responsibilities
 - Input validation and ownership checks
 - Entity creation and state management
 - Message queue publishing
 - Ownership-based data access control
+- Duplicate request prevention (idempotency)
+- Distributed transaction management (Saga pattern)
