@@ -102,6 +102,9 @@ public class FeedbackService {
             );
         }
 
+        // ✅ Валидация статуса персон перед началом сессии
+        validatePersonasAreReady(personas);
+
         // Create FeedbackSession
         FeedbackSession session = new FeedbackSession();
         session.setUser(user);
@@ -139,5 +142,40 @@ public class FeedbackService {
         }
 
         return savedSession.getId();
+    }
+
+    /**
+     * Validates that all personas are in ACTIVE status (ready for feedback generation).
+     *
+     * Personas must be fully generated before being used in feedback sessions.
+     * Statuses:
+     * - GENERATING: Still being processed by AI, cannot be used yet
+     * - ACTIVE: Ready to use, has all required fields populated
+     * - FAILED: Generation failed, cannot be used
+     *
+     * @param personas List of personas to validate
+     * @throws ValidationException if any persona is not ACTIVE
+     */
+    private void validatePersonasAreReady(List<Persona> personas) {
+        List<Persona> notReadyPersonas = personas.stream()
+            .filter(p -> p.getStatus() != Persona.PersonaStatus.ACTIVE)
+            .toList();
+
+        if (!notReadyPersonas.isEmpty()) {
+            String statusDetails = notReadyPersonas.stream()
+                .map(p -> "ID:" + p.getId() + " Status:" + p.getStatus())
+                .reduce((a, b) -> a + ", " + b)
+                .orElse("");
+
+            String message = String.format(
+                "Some personas are not ready for feedback generation. " +
+                "Required status: ACTIVE. Found: %s",
+                statusDetails
+            );
+            log.warn("Persona readiness validation failed: {}", message);
+            throw new ValidationException(message, "PERSONAS_NOT_READY");
+        }
+
+        log.debug("All {} personas are ready for feedback generation", personas.size());
     }
 }
