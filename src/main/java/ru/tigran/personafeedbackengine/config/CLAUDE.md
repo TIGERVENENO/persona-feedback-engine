@@ -1,7 +1,8 @@
 # config/
 
 ## Purpose
-Spring configuration beans for RabbitMQ, Redis caching, HTTP clients, and other infrastructure.
+Spring configuration beans for RabbitMQ, Redis caching, HTTP clients, security, and infrastructure setup.
+Includes startup validators to ensure critical configuration is present.
 
 ## Key Classes
 
@@ -29,6 +30,13 @@ Spring configuration beans for RabbitMQ, Redis caching, HTTP clients, and other 
 - Configures HTTP timeout: 30 seconds
 - Used by AIGatewayService for AI provider API calls (OpenRouter, AgentRouter)
 - Implements retry logic for 429 errors
+
+### ApiKeyValidator
+- Implements `ApplicationRunner` to validate configuration at startup
+- Checks that AI provider API keys are configured via environment variables
+- Prevents application start if required keys are missing or contain placeholder values
+- Supports multiple AI providers (OpenRouter, AgentRouter)
+- Logs validation results
 
 ## Configuration Properties
 Referenced from `application.properties`:
