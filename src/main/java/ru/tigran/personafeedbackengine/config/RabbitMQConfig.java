@@ -20,8 +20,7 @@ public class RabbitMQConfig {
 
     @Bean
     public Queue personaGenerationQueue() {
-        return new org.springframework.amqp.core.QueueBuilder(PERSONA_GENERATION_QUEUE)
-                .durable(true)
+        return org.springframework.amqp.core.QueueBuilder.durable(PERSONA_GENERATION_QUEUE)
                 .deadLetterExchange(DLX_EXCHANGE_NAME)
                 .deadLetterRoutingKey("persona.generation.dlq")
                 .build();
@@ -29,8 +28,7 @@ public class RabbitMQConfig {
 
     @Bean
     public Queue feedbackGenerationQueue() {
-        return new org.springframework.amqp.core.QueueBuilder(FEEDBACK_GENERATION_QUEUE)
-                .durable(true)
+        return org.springframework.amqp.core.QueueBuilder.durable(FEEDBACK_GENERATION_QUEUE)
                 .deadLetterExchange(DLX_EXCHANGE_NAME)
                 .deadLetterRoutingKey("feedback.generation.dlq")
                 .build();
