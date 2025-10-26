@@ -15,10 +15,8 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      # Initialize database schema on first startup
-      - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
-      - ./src/main/resources/data.sql:/docker-entrypoint-initdb.d/02-data.sql
       # Persistent volume for database data
+      # Database schema is managed by Flyway migrations (not by init scripts)
       - postgres_data:/var/lib/postgresql/data
     networks:
       - persona-feedback-network

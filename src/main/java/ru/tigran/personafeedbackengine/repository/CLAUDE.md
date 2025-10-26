@@ -7,7 +7,9 @@ Spring Data JPA repositories for database access.
 
 ### UserRepository
 - Extends `JpaRepository<User, Long>`
-- Custom methods: `findByUsername(String username)`
+- Custom methods:
+  - `findByEmail(String email)` - Find user by email address (returns Optional<User>)
+  - `existsByEmail(String email)` - Check if email already registered (returns boolean)
 
 ### ProductRepository
 - Extends `JpaRepository<Product, Long>`

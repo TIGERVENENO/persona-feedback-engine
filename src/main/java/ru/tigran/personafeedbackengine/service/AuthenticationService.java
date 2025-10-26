@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.tigran.personafeedbackengine.dto.AuthenticationResponse;
 import ru.tigran.personafeedbackengine.dto.LoginRequest;
 import ru.tigran.personafeedbackengine.dto.RegisterRequest;
+import ru.tigran.personafeedbackengine.exception.ErrorCode;
 import ru.tigran.personafeedbackengine.exception.ValidationException;
 import ru.tigran.personafeedbackengine.model.User;
 import ru.tigran.personafeedbackengine.repository.UserRepository;
@@ -50,8 +51,8 @@ public class AuthenticationService {
         if (userRepository.existsByEmail(request.email())) {
             log.warn("Registration failed: email already exists: {}", request.email());
             throw new ValidationException(
-                    "Email already registered",
-                    "EMAIL_ALREADY_EXISTS"
+                    ErrorCode.EMAIL_ALREADY_EXISTS.getDefaultMessage(),
+                    ErrorCode.EMAIL_ALREADY_EXISTS.getCode()
             );
         }
 
@@ -88,8 +89,8 @@ public class AuthenticationService {
                 .orElseThrow(() -> {
                     log.warn("Login failed: user not found: {}", request.email());
                     return new ValidationException(
-                            "Invalid email or password",
-                            "INVALID_CREDENTIALS"
+                            ErrorCode.INVALID_CREDENTIALS.getDefaultMessage(),
+                            ErrorCode.INVALID_CREDENTIALS.getCode()
                     );
                 });
 
@@ -97,8 +98,8 @@ public class AuthenticationService {
         if (!user.getIsActive() || user.getDeleted()) {
             log.warn("Login failed: user is inactive or deleted: {}", user.getId());
             throw new ValidationException(
-                    "User account is inactive or deleted",
-                    "USER_INACTIVE"
+                    ErrorCode.USER_INACTIVE.getDefaultMessage(),
+                    ErrorCode.USER_INACTIVE.getCode()
             );
         }
 
@@ -106,8 +107,8 @@ public class AuthenticationService {
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             log.warn("Login failed: invalid password for user: {}", user.getId());
             throw new ValidationException(
-                    "Invalid email or password",
-                    "INVALID_CREDENTIALS"
+                    ErrorCode.INVALID_CREDENTIALS.getDefaultMessage(),
+                    ErrorCode.INVALID_CREDENTIALS.getCode()
             );
         }
 

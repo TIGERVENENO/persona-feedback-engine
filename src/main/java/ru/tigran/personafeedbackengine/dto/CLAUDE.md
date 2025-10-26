@@ -50,6 +50,15 @@ Data transfer objects for API layer and message queue communication.
 - `personaId: Long`
 - `productId: Long`
 
+### SessionStatusInfo
+- Internal DTO for feedback session status aggregation
+- Fields:
+  - `completedCount: Long` - Number of completed feedback results
+  - `failedCount: Long` - Number of failed feedback results
+  - `totalCount: Long` - Total number of feedback results in session
+- Usage: Used by `FeedbackResultRepository.getSessionStatus()` for atomic status calculation
+- Not exposed in API responses
+
 ## Queue Message DTOs
 
 ### PersonaGenerationTask

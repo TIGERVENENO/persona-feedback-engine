@@ -38,6 +38,13 @@ All custom exceptions extend ApplicationException:
 - Includes provider-specific error messages
 - Supports chaining with root cause (constructor with Throwable parameter)
 
+### RetriableHttpException
+- Thrown when HTTP request fails with retriable error codes (429, 502, 503, 504)
+- Extends ApplicationException
+- Used by AIGatewayService async methods for retry logic with exponential backoff
+- HTTP status: 500 Internal Server Error (to client)
+- Signals that the operation should be retried automatically
+
 ## Error Mapping
 
 ### ExceptionInfo
@@ -66,12 +73,20 @@ All custom exceptions extend ApplicationException:
 - `PRODUCT_NOT_FOUND`
 - `USER_NOT_FOUND`
 - `SESSION_NOT_FOUND`
+- `FEEDBACK_RESULT_NOT_FOUND`
 - `UNAUTHORIZED_ACCESS`
 - `VALIDATION_ERROR`
 - `INVALID_PROMPT_LENGTH`
 - `TOO_MANY_PRODUCTS`
 - `TOO_MANY_PERSONAS`
+- `PERSONAS_NOT_READY`
+- `DUPLICATE_REQUEST`
+- `EMAIL_ALREADY_EXISTS`
+- `INVALID_CREDENTIALS`
+- `USER_INACTIVE`
 - `AI_SERVICE_ERROR`
+- `INVALID_AI_RESPONSE`
+- `INVALID_JSON_RESPONSE`
 - `INTERNAL_SERVER_ERROR`
 
 ## Design Improvements (SRP)

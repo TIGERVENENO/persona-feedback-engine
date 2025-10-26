@@ -10,24 +10,29 @@
 -- ============================================================================
 -- USERS TABLE
 -- ============================================================================
--- Stores user/marketer profiles.
+-- Stores user/marketer profiles with JWT authentication.
 -- Primary entity for data isolation and multi-tenancy.
 -- Root aggregate in the domain model.
+-- Uses email-based authentication (no username field).
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
-    username VARCHAR(255) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(60) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+    deleted BOOLEAN DEFAULT FALSE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_users_username ON users(username);
-CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_user_email ON users(email);
+CREATE INDEX idx_user_deleted ON users(deleted);
 
 COMMENT ON TABLE users IS 'Platform users/marketers who create personas and run feedback sessions';
 COMMENT ON COLUMN users.id IS 'Unique identifier for the user';
-COMMENT ON COLUMN users.username IS 'Unique username for login';
-COMMENT ON COLUMN users.email IS 'Unique email address for communication';
+COMMENT ON COLUMN users.email IS 'Unique email address for authentication and communication';
+COMMENT ON COLUMN users.password_hash IS 'BCrypt hashed password (60 characters, work factor 10)';
+COMMENT ON COLUMN users.is_active IS 'Account active status (default: true)';
+COMMENT ON COLUMN users.deleted IS 'Soft delete flag (default: false)';
 COMMENT ON COLUMN users.created_at IS 'Timestamp when user was created';
 COMMENT ON COLUMN users.updated_at IS 'Timestamp when user was last modified';
 
@@ -41,6 +46,7 @@ CREATE TABLE IF NOT EXISTS products (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     user_id BIGINT NOT NULL,
+    deleted BOOLEAN DEFAULT FALSE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_products_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -48,6 +54,7 @@ CREATE TABLE IF NOT EXISTS products (
 
 CREATE INDEX idx_products_user_id ON products(user_id);
 CREATE INDEX idx_products_user_id_id ON products(user_id, id);
+CREATE INDEX idx_product_user_deleted ON products(user_id, deleted);
 
 COMMENT ON TABLE products IS 'Products/services that receive feedback from personas';
 COMMENT ON COLUMN products.id IS 'Unique identifier for the product';
@@ -75,6 +82,7 @@ CREATE TABLE IF NOT EXISTS personas (
     status VARCHAR(20) NOT NULL DEFAULT 'GENERATING',
     generation_prompt TEXT NOT NULL,
     user_id BIGINT NOT NULL,
+    deleted BOOLEAN DEFAULT FALSE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_personas_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -84,6 +92,7 @@ CREATE TABLE IF NOT EXISTS personas (
 CREATE INDEX idx_personas_user_id ON personas(user_id);
 CREATE INDEX idx_personas_user_id_id ON personas(user_id, id);
 CREATE INDEX idx_personas_status ON personas(status);
+CREATE INDEX idx_persona_user_deleted ON personas(user_id, deleted);
 
 COMMENT ON TABLE personas IS 'AI-generated personas for providing product feedback';
 COMMENT ON COLUMN personas.id IS 'Unique identifier for the persona';
