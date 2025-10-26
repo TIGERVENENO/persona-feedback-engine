@@ -43,3 +43,6 @@ build/
 *.swo
 *~
 .DS_Store
+
+### Application Properties (with API keys) ###
+src/main/resources/application-dev.properties
