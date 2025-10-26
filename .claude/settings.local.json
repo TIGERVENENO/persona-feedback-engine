@@ -8,7 +8,14 @@
       "Bash(export JAVA_HOME=\"/c/Users/Tigran/.jdks/openjdk-22.0.2\")",
       "Bash(docker-compose ps:*)",
       "Bash(pkill:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(mvn clean test:*)",
+      "Read(//c/Users/Tigran/.jdks/**)",
+      "Bash(export JAVA_HOME=\"C:\\Program Files\\Java\\jdk-21\")",
+      "Bash(mvn test:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
