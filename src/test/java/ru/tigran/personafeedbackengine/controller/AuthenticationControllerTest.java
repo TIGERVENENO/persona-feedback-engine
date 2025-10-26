@@ -5,9 +5,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import ru.tigran.personafeedbackengine.config.TestConfig;
 import ru.tigran.personafeedbackengine.dto.AuthenticationResponse;
 import ru.tigran.personafeedbackengine.dto.LoginRequest;
 import ru.tigran.personafeedbackengine.dto.RegisterRequest;
@@ -24,6 +26,7 @@ import static org.hamcrest.Matchers.*;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Import(TestConfig.class)
 @DisplayName("AuthenticationController интеграционные тесты")
 class AuthenticationControllerTest {
 
