@@ -1,6 +1,8 @@
 package ru.tigran.personafeedbackengine.config;
 
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.retry.RetryRegistry;
+import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
 import org.mockito.Mockito;
 import org.redisson.api.RedissonClient;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -67,5 +69,25 @@ public class TestConfig {
     @Primary
     public RetryRegistry retryRegistry() {
         return Mockito.mock(RetryRegistry.class);
+    }
+
+    /**
+     * Мокирует CircuitBreakerRegistry для тестирования
+     * @return Mock CircuitBreakerRegistry
+     */
+    @Bean
+    @Primary
+    public CircuitBreakerRegistry circuitBreakerRegistry() {
+        return Mockito.mock(CircuitBreakerRegistry.class);
+    }
+
+    /**
+     * Мокирует TimeLimiterRegistry для тестирования
+     * @return Mock TimeLimiterRegistry
+     */
+    @Bean
+    @Primary
+    public TimeLimiterRegistry timeLimiterRegistry() {
+        return Mockito.mock(TimeLimiterRegistry.class);
     }
 }

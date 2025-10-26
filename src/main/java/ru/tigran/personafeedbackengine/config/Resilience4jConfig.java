@@ -10,6 +10,7 @@ import io.github.resilience4j.core.registry.RegistryEventConsumer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import ru.tigran.personafeedbackengine.exception.AIGatewayException;
 
 import java.time.Duration;
@@ -19,6 +20,7 @@ import java.time.Duration;
  */
 @Slf4j
 @Configuration
+@Profile("!test")
 public class Resilience4jConfig {
 
     /**
