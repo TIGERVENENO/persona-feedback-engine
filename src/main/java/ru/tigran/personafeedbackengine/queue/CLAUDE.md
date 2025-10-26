@@ -32,8 +32,16 @@ Message consumers for asynchronous task processing from RabbitMQ queues.
   7. Check if all FeedbackResults for the session are done; if yes, update FeedbackSession to COMPLETED
   8. Log errors and transition to FAILED on exception
 
+## Concurrency & Synchronization
+- **FeedbackTaskConsumer** uses Redisson distributed locks for session status updates
+- Lock key pattern: `feedback-session-lock:{sessionId}`
+- Lock timeout: 10 seconds
+- Prevents race conditions when multiple consumer instances update the same session status
+- Enables safe horizontal scaling
+
 ## Error Handling
 - Exceptions caught and logged
 - Entities transitioned to FAILED state
 - Idempotency ensures safe message redelivery
 - No retry queue or exponential backoff (MVP scope)
+- Distributed locks ensure atomic status updates across multiple instances

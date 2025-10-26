@@ -1,6 +1,8 @@
 package ru.tigran.personafeedbackengine.queue;
 
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +19,8 @@ import ru.tigran.personafeedbackengine.repository.PersonaRepository;
 import ru.tigran.personafeedbackengine.repository.ProductRepository;
 import ru.tigran.personafeedbackengine.service.AIGatewayService;
 
+import java.util.concurrent.TimeUnit;
+
 @Slf4j
 @Service
 public class FeedbackTaskConsumer {
@@ -26,19 +30,22 @@ public class FeedbackTaskConsumer {
     private final PersonaRepository personaRepository;
     private final ProductRepository productRepository;
     private final AIGatewayService aiGatewayService;
+    private final RedissonClient redissonClient;
 
     public FeedbackTaskConsumer(
             FeedbackResultRepository feedbackResultRepository,
             FeedbackSessionRepository feedbackSessionRepository,
             PersonaRepository personaRepository,
             ProductRepository productRepository,
-            AIGatewayService aiGatewayService
+            AIGatewayService aiGatewayService,
+            RedissonClient redissonClient
     ) {
         this.feedbackResultRepository = feedbackResultRepository;
         this.feedbackSessionRepository = feedbackSessionRepository;
         this.personaRepository = personaRepository;
         this.productRepository = productRepository;
         this.aiGatewayService = aiGatewayService;
+        this.redissonClient = redissonClient;
     }
 
     /**
@@ -116,25 +123,43 @@ public class FeedbackTaskConsumer {
     }
 
     private void checkAndUpdateSessionCompletion(Long sessionId) {
-        try {
-            FeedbackSession session = feedbackSessionRepository.findByIdForUpdate(sessionId)
-                    .orElse(null);
+        // Используем распределенную блокировку для синхронизации доступа при горизонтальном масштабировании
+        String lockKey = "feedback-session-lock:" + sessionId;
+        RLock lock = redissonClient.getLock(lockKey);
 
-            if (session == null) {
+        try {
+            // Пытаемся получить блокировку с timeout 10 секунд
+            boolean locked = lock.tryLock(10, TimeUnit.SECONDS);
+            if (!locked) {
+                log.warn("Could not acquire lock for feedback session {}", sessionId);
                 return;
             }
 
-            var statusInfo = feedbackResultRepository.getSessionStatus(sessionId);
+            try {
+                FeedbackSession session = feedbackSessionRepository.findByIdForUpdate(sessionId)
+                        .orElse(null);
 
-            if (statusInfo.completed() + statusInfo.failed() >= statusInfo.total()) {
-                int updated = feedbackSessionRepository.updateStatusIfNotAlready(
-                        sessionId,
-                        FeedbackSession.FeedbackSessionStatus.COMPLETED
-                );
-                if (updated > 0) {
-                    log.info("Feedback session {} marked as COMPLETED", sessionId);
+                if (session == null) {
+                    return;
                 }
+
+                var statusInfo = feedbackResultRepository.getSessionStatus(sessionId);
+
+                if (statusInfo.completed() + statusInfo.failed() >= statusInfo.total()) {
+                    int updated = feedbackSessionRepository.updateStatusIfNotAlready(
+                            sessionId,
+                            FeedbackSession.FeedbackSessionStatus.COMPLETED
+                    );
+                    if (updated > 0) {
+                        log.info("Feedback session {} marked as COMPLETED", sessionId);
+                    }
+                }
+            } finally {
+                lock.unlock();
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("Interrupted while acquiring lock for feedback session {}", sessionId, e);
         } catch (Exception e) {
             log.error("Error updating feedback session completion status for session {}", sessionId, e);
         }

@@ -38,10 +38,18 @@ Includes startup validators to ensure critical configuration is present.
 - Supports multiple AI providers (OpenRouter, AgentRouter)
 - Logs validation results
 
+### RedissonConfig
+- Configures Redisson client for distributed locking and advanced Redis features
+- Auto-detects Redis host, port, and password from Spring Data Redis configuration
+- Supports password-protected Redis instances
+- Used for distributed locks across multiple application instances
+- Timeout: 10 seconds for lock acquisition
+- Enables horizontal scaling with synchronized state updates
+
 ## Configuration Properties
 Referenced from `application.properties`:
 - `spring.rabbitmq.*` - RabbitMQ connection
-- `spring.data.redis.*` - Redis connection
+- `spring.data.redis.*` - Redis connection (host, port, password)
 - `app.ai.provider` - Selected AI provider ("openrouter" or "agentrouter")
 - `app.openrouter.*` - OpenRouter API settings (api-key, model, timeout, retry-delay)
 - `app.agentrouter.*` - AgentRouter API settings (api-key, model, timeout, retry-delay)
