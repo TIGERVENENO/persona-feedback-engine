@@ -96,43 +96,18 @@ public class FeedbackTaskConsumer {
             feedbackResultRepository.save(result);
             log.info("Successfully generated and saved feedback result {}", result.getId());
 
-            // Check if all results for the session are completed
-            FeedbackSession session = result.getFeedbackSession();
-            long completedCount = feedbackResultRepository.countByFeedbackSessionIdAndStatus(
-                    session.getId(),
-                    FeedbackResult.FeedbackResultStatus.COMPLETED.name()
-            );
-            long totalCount = feedbackResultRepository.findByFeedbackSessionId(session.getId()).size();
-
-            if (completedCount == totalCount) {
-                session.setStatus(FeedbackSession.FeedbackSessionStatus.COMPLETED);
-                feedbackSessionRepository.save(session);
-                log.info("Feedback session {} completed", session.getId());
-            }
+            checkAndUpdateSessionCompletion(result.getFeedbackSession().getId());
 
         } catch (Exception e) {
             log.error("Error processing feedback generation task for result {}", task.resultId(), e);
-            // Mark result as FAILED
             try {
                 FeedbackResult result = feedbackResultRepository.findById(task.resultId()).orElse(null);
                 if (result != null) {
                     result.setStatus(FeedbackResult.FeedbackResultStatus.FAILED);
                     feedbackResultRepository.save(result);
-
-                    // If all results are done (either completed or failed), mark session as completed or failed
-                    FeedbackSession session = result.getFeedbackSession();
-                    long failedCount = feedbackResultRepository.countByFeedbackSessionIdAndStatus(
-                            session.getId(),
-                            FeedbackResult.FeedbackResultStatus.FAILED.name()
-                    );
-                    long totalCount = feedbackResultRepository.findByFeedbackSessionId(session.getId()).size();
-
-                    if (failedCount + countCompletedResults(session.getId()) >= totalCount) {
-                        session.setStatus(FeedbackSession.FeedbackSessionStatus.COMPLETED);
-                        feedbackSessionRepository.save(session);
-                    }
-
                     log.warn("Marked feedback result {} as FAILED", result.getId());
+
+                    checkAndUpdateSessionCompletion(result.getFeedbackSession().getId());
                 }
             } catch (Exception innerE) {
                 log.error("Failed to mark feedback result as FAILED", innerE);
@@ -140,10 +115,36 @@ public class FeedbackTaskConsumer {
         }
     }
 
-    private long countCompletedResults(Long sessionId) {
-        return feedbackResultRepository.countByFeedbackSessionIdAndStatus(
-                sessionId,
-                FeedbackResult.FeedbackResultStatus.COMPLETED.name()
-        );
+    private void checkAndUpdateSessionCompletion(Long sessionId) {
+        try {
+            FeedbackSession session = feedbackSessionRepository.findByIdForUpdate(sessionId)
+                    .orElse(null);
+
+            if (session == null) {
+                return;
+            }
+
+            long completedCount = feedbackResultRepository.countByFeedbackSessionIdAndStatus(
+                    sessionId,
+                    FeedbackResult.FeedbackResultStatus.COMPLETED.name()
+            );
+            long failedCount = feedbackResultRepository.countByFeedbackSessionIdAndStatus(
+                    sessionId,
+                    FeedbackResult.FeedbackResultStatus.FAILED.name()
+            );
+            long totalCount = feedbackResultRepository.findByFeedbackSessionId(sessionId).size();
+
+            if (completedCount + failedCount >= totalCount) {
+                int updated = feedbackSessionRepository.updateStatusIfNotAlready(
+                        sessionId,
+                        FeedbackSession.FeedbackSessionStatus.COMPLETED
+                );
+                if (updated > 0) {
+                    log.info("Feedback session {} marked as COMPLETED", sessionId);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error updating feedback session completion status for session {}", sessionId, e);
+        }
     }
 }
