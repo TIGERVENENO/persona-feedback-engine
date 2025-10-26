@@ -6,11 +6,18 @@ Spring configuration beans for RabbitMQ, Redis caching, HTTP clients, and other 
 ## Key Classes
 
 ### RabbitMQConfig
-- Defines two separate queues:
-  - `persona.generation.queue` - Heavy persona generation tasks
-  - `feedback.generation.queue` - Feedback generation tasks
-- Configures queue-to-exchange bindings
-- Enables message routing and deduplication
+- Defines message queues and exchanges with Dead Letter Queue (DLQ) support:
+  - **Main queues:**
+    - `persona.generation.queue` - Heavy persona generation tasks
+    - `feedback.generation.queue` - Feedback generation tasks
+  - **Dead Letter Queues (for failed messages):**
+    - `persona.generation.dlq` - Failed persona generation tasks
+    - `feedback.generation.dlq` - Failed feedback generation tasks
+  - **Exchanges:**
+    - `persona-feedback-exchange` - Main exchange for task distribution
+    - `persona-feedback-dlx` - Dead Letter Exchange for failed messages
+- Automatic routing: Failed/rejected messages are routed to DLQ for later analysis
+- Enables message routing, deduplication, and failure tracking
 
 ### CacheConfig
 - Configures Redis as the cache manager
