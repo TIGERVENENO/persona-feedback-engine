@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -79,6 +80,7 @@ public class FeedbackController {
      * @param sessionId feedback session ID
      * @return FeedbackSessionResponse with status and feedback results
      */
+    @Transactional(readOnly = true)
     @GetMapping("/{sessionId}")
     public ResponseEntity<FeedbackSessionResponse> getFeedbackSession(
             @RequestHeader("X-User-Id") Long userId,
@@ -92,7 +94,7 @@ public class FeedbackController {
                         "UNAUTHORIZED_ACCESS"
                 ));
 
-        List<FeedbackResult> results = feedbackResultRepository.findByFeedbackSessionId(sessionId);
+        List<FeedbackResult> results = feedbackResultRepository.findByFeedbackSessionIdWithDetails(sessionId);
 
         List<FeedbackResultDTO> resultDTOs = results.stream()
                 .map(result -> new FeedbackResultDTO(
