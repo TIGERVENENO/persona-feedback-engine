@@ -102,7 +102,6 @@ public class FeedbackService {
             );
         }
 
-        // ✅ Валидация статуса персон перед началом сессии
         validatePersonasAreReady(personas);
 
         // Create FeedbackSession

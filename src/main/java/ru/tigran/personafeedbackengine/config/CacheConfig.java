@@ -30,7 +30,7 @@ public class CacheConfig {
         // Создаём конфигурацию с TTL 24 часа
         RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofHours(24))
-                .disableCachingNullValues()  // ✅ Не кешировать null значения
+                .disableCachingNullValues()
                 .serializeKeysWith(
                     RedisSerializationContext.SerializationPair.fromSerializer(
                         new StringRedisSerializer()
@@ -42,7 +42,6 @@ public class CacheConfig {
                     )
                 );
 
-        // ✅ КРИТИЧЕСКИ: Применяем конфигурацию к RedisCacheManager
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(config)
                 .build();
