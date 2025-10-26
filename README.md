@@ -410,22 +410,7 @@ The system supports multiple AI providers and models. You can switch between the
 
 ### Available Models
 
-Both providers support multiple LLM models. Examples:
-
-**Anthropic:**
-- `anthropic/claude-3-5-sonnet` - High performance, best for complex tasks
-- `anthropic/claude-3-5-haiku` - Fast, lightweight, lower cost
-- `anthropic/claude-3-opus` - Maximum capability
-
-**OpenAI:**
-- `openai/gpt-4-turbo` - Advanced reasoning and analysis
-- `openai/gpt-4o` - Multimodal capabilities
-- `openai/gpt-3.5-turbo` - Fast and cost-effective
-
-**Other providers:**
-- `mistral/mistral-large` - Fast open-source model
-- `meta-llama/llama-2-70b-chat` - Open source alternative
-- And many more available through OpenRouter/AgentRouter
+Both providers support multiple LLM models.
 
 See [OpenRouter Models](https://openrouter.ai/docs#models) or [AgentRouter Models](https://agentrouter.ai/docs#models) for complete list.
 
@@ -440,8 +425,8 @@ Edit your `.env` file:
 AI_PROVIDER=agentrouter
 
 # Set which model to use for each provider
-OPENROUTER_MODEL=anthropic/claude-3-5-sonnet
-AGENTROUTER_MODEL=anthropic/claude-3-5-sonnet
+OPENROUTER_MODEL=deepseek/deepseek-r1-0528:free
+AGENTROUTER_MODEL=deepseek/deepseek-v3.1
 
 # Provide credentials for the provider you're using
 AGENTROUTER_API_KEY=sk-or-v1-your-agentrouter-key-here
@@ -460,12 +445,12 @@ app.ai.provider=agentrouter
 
 # ======== OpenRouter API Configuration ========
 app.openrouter.api-key=sk-or-YOUR_OPENROUTER_API_KEY_HERE
-app.openrouter.model=anthropic/claude-3-5-sonnet
+app.openrouter.model=deepseek/deepseek-r1-0528:free
 app.openrouter.retry-delay-ms=1000
 
 # ======== AgentRouter API Configuration ========
 app.agentrouter.api-key=sk-or-v1-YOUR_AGENTROUTER_API_KEY_HERE
-app.agentrouter.model=anthropic/claude-3-5-sonnet
+app.agentrouter.model=deepseek/deepseek-v3.1
 app.agentrouter.retry-delay-ms=1000
 ```
 
@@ -500,8 +485,7 @@ Both providers use the same OpenAI-compatible API format, so switching is seamle
   ]
 }
 ```
-
-For example, if you configure `app.agentrouter.model=openai/gpt-4o`, the API will use GPT-4o. If you set it to `anthropic/claude-3-5-sonnet`, it will use Claude. You can change this anytime in your configuration.
+You can change this anytime in your configuration.
 
 The `AIGatewayService` automatically handles provider-specific details (URLs, authentication, retries, and model selection) based on your configuration.
 
