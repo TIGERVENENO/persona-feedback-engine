@@ -12,19 +12,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import ru.tigran.personafeedbackengine.dto.FeedbackResultDTO;
 import ru.tigran.personafeedbackengine.dto.FeedbackSessionRequest;
 import ru.tigran.personafeedbackengine.dto.FeedbackSessionResponse;
 import ru.tigran.personafeedbackengine.dto.JobResponse;
-import ru.tigran.personafeedbackengine.exception.UnauthorizedException;
-import ru.tigran.personafeedbackengine.model.FeedbackResult;
-import ru.tigran.personafeedbackengine.model.FeedbackSession;
-import ru.tigran.personafeedbackengine.repository.FeedbackResultRepository;
-import ru.tigran.personafeedbackengine.repository.FeedbackSessionRepository;
 import ru.tigran.personafeedbackengine.service.FeedbackService;
-
-import java.util.List;
-import java.util.stream.Collectors;
+import ru.tigran.personafeedbackengine.service.FeedbackQueryService;
 
 @Slf4j
 @RestController
@@ -32,17 +24,14 @@ import java.util.stream.Collectors;
 public class FeedbackController {
 
     private final FeedbackService feedbackService;
-    private final FeedbackSessionRepository feedbackSessionRepository;
-    private final FeedbackResultRepository feedbackResultRepository;
+    private final FeedbackQueryService feedbackQueryService;
 
     public FeedbackController(
             FeedbackService feedbackService,
-            FeedbackSessionRepository feedbackSessionRepository,
-            FeedbackResultRepository feedbackResultRepository
+            FeedbackQueryService feedbackQueryService
     ) {
         this.feedbackService = feedbackService;
-        this.feedbackSessionRepository = feedbackSessionRepository;
-        this.feedbackResultRepository = feedbackResultRepository;
+        this.feedbackQueryService = feedbackQueryService;
     }
 
     /**
@@ -80,7 +69,6 @@ public class FeedbackController {
      * @param sessionId feedback session ID
      * @return FeedbackSessionResponse with status and feedback results
      */
-    @Transactional(readOnly = true)
     @GetMapping("/{sessionId}")
     public ResponseEntity<FeedbackSessionResponse> getFeedbackSession(
             @RequestHeader("X-User-Id") Long userId,
@@ -88,30 +76,7 @@ public class FeedbackController {
     ) {
         log.info("GET /api/v1/feedback-sessions/{} - user: {}", sessionId, userId);
 
-        FeedbackSession session = feedbackSessionRepository.findByUserIdAndId(userId, sessionId)
-                .orElseThrow(() -> new UnauthorizedException(
-                        "Feedback session not found or does not belong to this user",
-                        "UNAUTHORIZED_ACCESS"
-                ));
-
-        List<FeedbackResult> results = feedbackResultRepository.findByFeedbackSessionIdWithDetails(sessionId);
-
-        List<FeedbackResultDTO> resultDTOs = results.stream()
-                .map(result -> new FeedbackResultDTO(
-                        result.getId(),
-                        result.getFeedbackText(),
-                        result.getStatus().name(),
-                        result.getPersona().getId(),
-                        result.getProduct().getId()
-                ))
-                .collect(Collectors.toList());
-
-        FeedbackSessionResponse response = new FeedbackSessionResponse(
-                session.getId(),
-                session.getStatus().name(),
-                session.getCreatedAt(),
-                resultDTOs
-        );
+        FeedbackSessionResponse response = feedbackQueryService.getFeedbackSessionCached(userId, sessionId);
 
         return ResponseEntity.ok(response);
     }
