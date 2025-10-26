@@ -1,14 +1,12 @@
 package ru.tigran.personafeedbackengine.exception;
 
-public class ValidationException extends RuntimeException {
-    private final String errorCode;
-
+/**
+ * Thrown for business logic validation failures.
+ * Examples: prompt exceeds max length, too many products/personas in request, referenced entity doesn't exist.
+ * HTTP status: 400 Bad Request
+ */
+public class ValidationException extends ApplicationException {
     public ValidationException(String message, String errorCode) {
-        super(message);
-        this.errorCode = errorCode;
-    }
-
-    public String getErrorCode() {
-        return errorCode;
+        super(message, errorCode);
     }
 }
