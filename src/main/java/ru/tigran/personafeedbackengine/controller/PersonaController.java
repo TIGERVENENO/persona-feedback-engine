@@ -4,9 +4,9 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ru.tigran.personafeedbackengine.dto.JobResponse;
@@ -28,15 +28,17 @@ public class PersonaController {
      * Triggers a persona generation workflow.
      * The generated persona details will be available asynchronously as the task is processed from the queue.
      *
-     * @param userId user ID from X-User-Id header
+     * Requires JWT authentication. User ID is extracted from the JWT token in Authorization header.
+     *
      * @param request persona generation request with prompt
      * @return JobResponse with persona ID and initial status
      */
     @PostMapping
     public ResponseEntity<JobResponse> generatePersona(
-            @RequestHeader("X-User-Id") Long userId,
             @Valid @RequestBody PersonaGenerationRequest request
     ) {
+        // Extract user ID from JWT token stored in SecurityContext
+        Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         log.info("POST /api/v1/personas - user: {}, prompt length: {}", userId, request.prompt().length());
 
         Long personaId = personaService.startPersonaGeneration(userId, request);

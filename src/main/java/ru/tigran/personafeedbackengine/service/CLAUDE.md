@@ -5,6 +5,40 @@ Business logic and orchestration layer for the application.
 
 ## Key Classes
 
+### AuthenticationService
+User registration and login service with JWT token generation and BCrypt password hashing.
+
+**Methods:**
+- `register(RegisterRequest request) → AuthenticationResponse`
+  - Creates new user with email and hashed password
+  - Validates email is unique before insertion
+  - Uses BCryptPasswordEncoder to hash password securely
+  - Generates JWT token with user ID as subject
+  - Returns userId, accessToken, tokenType="Bearer"
+  - Throws ValidationException if email already exists or validation fails
+  - Transactional with readOnly=false
+
+- `login(LoginRequest request) → AuthenticationResponse`
+  - Finds user by email address
+  - Verifies user account is active (not deleted)
+  - Matches provided password against stored BCrypt hash
+  - Generates JWT token with user ID as subject
+  - Returns userId, accessToken, tokenType="Bearer"
+  - Throws ValidationException if email not found, account inactive, or password invalid
+  - Transactional with readOnly=true
+
+**Integration:**
+- Uses UserRepository for database access (findByEmail, existsByEmail)
+- Uses PasswordEncoder (BCryptPasswordEncoder) for password hashing and verification
+- Uses JwtTokenProvider for token generation
+- Called by AuthenticationController for register/login endpoints
+
+**Key Implementation Details:**
+- Password validation uses passwordEncoder.matches() for constant-time comparison
+- Email uniqueness checked via existsByEmail() before registration
+- Both methods log authentication attempts at info level
+- Errors include descriptive messages (INVALID_CREDENTIALS, EMAIL_ALREADY_EXISTS)
+
 ### AIGatewayService
 - Smart multi-provider client for AI API integration (OpenRouter, AgentRouter)
 - Supports both **synchronous** (RestClient) and **asynchronous** (WebClient) HTTP calls
