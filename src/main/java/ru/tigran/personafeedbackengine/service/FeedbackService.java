@@ -1,5 +1,8 @@
 package ru.tigran.personafeedbackengine.service;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +39,8 @@ public class FeedbackService {
     private final RabbitTemplate rabbitTemplate;
     private final int maxProductsPerSession;
     private final int maxPersonasPerSession;
+    private final Counter feedbackSessionInitiatedCounter;
+    private final Timer feedbackSessionTimer;
 
     public FeedbackService(
             FeedbackSessionRepository feedbackSessionRepository,
@@ -45,7 +50,8 @@ public class FeedbackService {
             UserRepository userRepository,
             RabbitTemplate rabbitTemplate,
             @Value("${app.feedback.max-products-per-session}") int maxProductsPerSession,
-            @Value("${app.feedback.max-personas-per-session}") int maxPersonasPerSession
+            @Value("${app.feedback.max-personas-per-session}") int maxPersonasPerSession,
+            MeterRegistry meterRegistry
     ) {
         this.feedbackSessionRepository = feedbackSessionRepository;
         this.feedbackResultRepository = feedbackResultRepository;
@@ -55,6 +61,12 @@ public class FeedbackService {
         this.rabbitTemplate = rabbitTemplate;
         this.maxProductsPerSession = maxProductsPerSession;
         this.maxPersonasPerSession = maxPersonasPerSession;
+        this.feedbackSessionInitiatedCounter = Counter.builder("feedback.session.initiated")
+                .description("Total feedback sessions initiated")
+                .register(meterRegistry);
+        this.feedbackSessionTimer = Timer.builder("feedback.session.time")
+                .description("Time to initiate feedback session")
+                .register(meterRegistry);
     }
 
     /**
@@ -64,9 +76,16 @@ public class FeedbackService {
      */
     @Transactional
     public Long startFeedbackSession(Long userId, FeedbackSessionRequest request) {
+        try {
+            return feedbackSessionTimer.recordCallable(() -> executeStartFeedbackSession(userId, request));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private Long executeStartFeedbackSession(Long userId, FeedbackSessionRequest request) {
         log.info("Starting feedback session for user {}", userId);
 
-        // Validate request
         if (request.productIds().size() > maxProductsPerSession) {
             throw new ValidationException(
                     "Too many products. Maximum is " + maxProductsPerSession,
@@ -80,11 +99,9 @@ public class FeedbackService {
             );
         }
 
-        // Verify user exists
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ValidationException("User not found", "USER_NOT_FOUND"));
 
-        // Fetch and validate products (ownership check)
         List<Product> products = productRepository.findByUserIdAndIdIn(userId, request.productIds());
         if (products.size() != request.productIds().size()) {
             throw new UnauthorizedException(
@@ -93,7 +110,6 @@ public class FeedbackService {
             );
         }
 
-        // Fetch and validate personas (ownership check)
         List<Persona> personas = personaRepository.findByUserIdAndIdIn(userId, request.personaIds());
         if (personas.size() != request.personaIds().size()) {
             throw new UnauthorizedException(
@@ -104,7 +120,6 @@ public class FeedbackService {
 
         validatePersonasAreReady(personas);
 
-        // Create FeedbackSession
         FeedbackSession session = new FeedbackSession();
         session.setUser(user);
         session.setStatus(FeedbackSession.FeedbackSessionStatus.PENDING);
@@ -113,7 +128,6 @@ public class FeedbackService {
         FeedbackSession savedSession = feedbackSessionRepository.save(session);
         log.info("Created feedback session with id {}", savedSession.getId());
 
-        // Create FeedbackResult entities (batch insert)
         List<FeedbackResult> results = new ArrayList<>();
         for (Product product : products) {
             for (Persona persona : personas) {
@@ -126,11 +140,9 @@ public class FeedbackService {
             }
         }
 
-        // Batch insert all results
         List<FeedbackResult> savedResults = feedbackResultRepository.saveAll(results);
         log.info("Batch created {} feedback results for session {}", savedResults.size(), savedSession.getId());
 
-        // Publish all tasks to queue
         for (FeedbackResult savedResult : savedResults) {
             FeedbackGenerationTask task = new FeedbackGenerationTask(
                     savedResult.getId(),
@@ -145,6 +157,7 @@ public class FeedbackService {
         }
         log.info("Published {} feedback generation tasks for session {}", savedResults.size(), savedSession.getId());
 
+        feedbackSessionInitiatedCounter.increment();
         return savedSession.getId();
     }
 
