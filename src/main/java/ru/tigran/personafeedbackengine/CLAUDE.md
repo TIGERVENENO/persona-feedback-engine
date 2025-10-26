@@ -22,6 +22,7 @@ Core package for the Persona Feedback Engine - a Spring Boot 3.x asynchronous se
 ## Key Design Decisions
 1. **User-scoped data** - All entities strictly isolated by user_id
 2. **Prompt-based caching** - Personas cached by generation prompt for reusability
-3. **Simple authentication** - X-User-Id header for MVP
-4. **Structured errors** - Consistent error response format with error codes
-5. **No complex retry logic** - Failed tasks transition to FAILED state without retry queue
+3. **JWT Authentication** - Stateless bearer token authentication with email/password registration
+4. **Secure passwords** - BCrypt hashing with automatic salt generation (work factor 10)
+5. **Structured errors** - Consistent error response format with error codes
+6. **No complex retry logic** - Failed tasks transition to FAILED state without retry queue
