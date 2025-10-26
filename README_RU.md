@@ -84,8 +84,8 @@ nano .env  # или ваш предпочитаемый редактор
 - `AI_PROVIDER` - Какой провайдер использовать: `openrouter` или `agentrouter` (по умолчанию: `agentrouter`)
 - `OPENROUTER_API_KEY` - Ваш OpenRouter API ключ (обязателен если используете OpenRouter)
 - `AGENTROUTER_API_KEY` - Ваш AgentRouter API ключ (обязателен если используете AgentRouter)
-- `OPENROUTER_MODEL` - Модель для OpenRouter (по умолчанию: anthropic/claude-3-5-sonnet)
-- `AGENTROUTER_MODEL` - Модель для AgentRouter (по умолчанию: anthropic/claude-3-5-sonnet)
+- `OPENROUTER_MODEL` - Модель для OpenRouter (по умолчанию: deepseek/deepseek-r1-0528:free)
+- `AGENTROUTER_MODEL` - Модель для AgentRouter (по умолчанию: deepseek/deepseek-v3.1)
 - `POSTGRES_PASSWORD` - Пароль базы данных (по умолчанию: postgres)
 - `REDIS_PASSWORD` - Пароль Redis (по умолчанию: redispass)
 - `RABBITMQ_PASSWORD` - Пароль RabbitMQ (по умолчанию: guest)
@@ -172,23 +172,7 @@ curl http://localhost:8080/actuator/health
 
 ### Доступные модели
 
-Оба провайдера поддерживают множество LLM моделей. Примеры:
-
-**Anthropic (Claude):**
-- `anthropic/claude-3-5-sonnet` - Высокая производительность, отлично для сложных задач
-- `anthropic/claude-3-5-haiku` - Быстрая, легковесная, дешевле
-- `anthropic/claude-3-opus` - Максимальные возможности
-
-**OpenAI:**
-- `openai/gpt-4-turbo` - Продвинутое рассуждение и анализ
-- `openai/gpt-4o` - Мультимодальные возможности
-- `openai/gpt-3.5-turbo` - Быстрая и экономичная
-
-**Другие провайдеры:**
-- `mistral/mistral-large` - Быстрая открытая модель
-- `meta-llama/llama-2-70b-chat` - Открытая альтернатива
-- И много других доступно через OpenRouter/AgentRouter
-
+Оба провайдера поддерживают множество LLM моделей.
 Смотрите [OpenRouter Models](https://openrouter.ai/docs#models) или [AgentRouter Models](https://agentrouter.ai/docs#models) для полного списка.
 
 ### Как переключаться между провайдерами и моделями
@@ -202,8 +186,8 @@ curl http://localhost:8080/actuator/health
 AI_PROVIDER=agentrouter
 
 # Установите модель для каждого провайдера
-OPENROUTER_MODEL=anthropic/claude-3-5-sonnet
-AGENTROUTER_MODEL=anthropic/claude-3-5-sonnet
+OPENROUTER_MODEL=deepseek/deepseek-r1-0528:free
+AGENTROUTER_MODEL=deepseek/deepseek-v3.1
 
 # Установите учетные данные
 AGENTROUTER_API_KEY=sk-or-v1-your-agentrouter-key-here
@@ -222,12 +206,12 @@ app.ai.provider=agentrouter
 
 # ======== Конфигурация OpenRouter ========
 app.openrouter.api-key=sk-or-YOUR_OPENROUTER_API_KEY_HERE
-app.openrouter.model=anthropic/claude-3-5-sonnet
+app.openrouter.model=deepseek/deepseek-r1-0528:free
 app.openrouter.retry-delay-ms=1000
 
 # ======== Конфигурация AgentRouter ========
 app.agentrouter.api-key=sk-or-v1-YOUR_AGENTROUTER_API_KEY_HERE
-app.agentrouter.model=anthropic/claude-3-5-sonnet
+app.agentrouter.model=deepseek/deepseek-v3.1
 app.agentrouter.retry-delay-ms=1000
 ```
 
@@ -263,7 +247,7 @@ app.agentrouter.retry-delay-ms=1000
 }
 ```
 
-Например, если вы установите `app.agentrouter.model=openai/gpt-4o`, API будет использовать GPT-4o. Если установить `anthropic/claude-3-5-sonnet`, будет использоваться Claude. Вы можете менять это в конфигурации в любой момент.
+Вы можете менять это в конфигурации в любой момент.
 
 `AIGatewayService` автоматически обрабатывает детали провайдера (URLs, аутентификация, retry логика, выбор модели) на основе вашей конфигурации.
 
