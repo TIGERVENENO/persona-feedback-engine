@@ -1,5 +1,6 @@
 package ru.tigran.personafeedbackengine.config;
 
+import io.github.resilience4j.retry.RetryRegistry;
 import org.mockito.Mockito;
 import org.redisson.api.RedissonClient;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -11,7 +12,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
- * Тестовая конфигурация для мокирования Redis-зависимостей
+ * Тестовая конфигурация для мокирования Redis-зависимостей и Resilience4j
  * Используется при запуске интеграционных тестов
  */
 @TestConfiguration
@@ -56,5 +57,15 @@ public class TestConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    /**
+     * Мокирует RetryRegistry для тестирования без Resilience4j конфигурации
+     * @return Mock RetryRegistry
+     */
+    @Bean
+    @Primary
+    public RetryRegistry retryRegistry() {
+        return Mockito.mock(RetryRegistry.class);
     }
 }
