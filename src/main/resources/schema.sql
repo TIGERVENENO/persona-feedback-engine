@@ -155,6 +155,10 @@ CREATE INDEX idx_feedback_results_product_id ON feedback_results(product_id);
 CREATE INDEX idx_feedback_results_persona_id ON feedback_results(persona_id);
 CREATE INDEX idx_feedback_results_status ON feedback_results(status);
 CREATE INDEX idx_feedback_results_session_status ON feedback_results(feedback_session_id, status);
+CREATE INDEX idx_feedback_results_session_product_persona ON feedback_results(feedback_session_id, product_id, persona_id);
+
+CREATE INDEX idx_personas_user_status ON personas(user_id, status);
+CREATE INDEX idx_feedback_sessions_user_status ON feedback_sessions(user_id, status);
 
 COMMENT ON TABLE feedback_results IS 'Individual feedback entries from personas on products within sessions';
 COMMENT ON COLUMN feedback_results.id IS 'Unique identifier for the feedback result';
