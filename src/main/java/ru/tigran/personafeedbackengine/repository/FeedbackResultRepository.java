@@ -1,5 +1,7 @@
 package ru.tigran.personafeedbackengine.repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,6 +14,8 @@ import java.util.List;
 @Repository
 public interface FeedbackResultRepository extends JpaRepository<FeedbackResult, Long> {
     List<FeedbackResult> findByFeedbackSessionId(Long feedbackSessionId);
+
+    Page<FeedbackResult> findByFeedbackSessionId(Long feedbackSessionId, Pageable pageable);
 
     @Query("SELECT COUNT(fr) FROM FeedbackResult fr " +
            "WHERE fr.feedbackSession.id = :sessionId AND fr.status = :status")
