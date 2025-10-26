@@ -34,7 +34,7 @@ Spring Data JPA repositories for database access.
 - Custom methods:
   - `findByFeedbackSessionId(Long sessionId)` - Fetch all results for a session
   - `findByFeedbackSessionIdWithDetails(Long sessionId)` - Fetch results with eager loading of Persona and Product (LEFT JOIN FETCH)
-  - `countByFeedbackSessionIdAndStatus(Long sessionId, String status)` - Check completion
+  - `countBySessionAndStatus(Long sessionId, FeedbackResultStatus status)` - Count results by status (safe, uses enum instead of String)
 
 ## Design Notes
 - All queries include userId filter for data isolation

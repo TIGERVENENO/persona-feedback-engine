@@ -12,7 +12,10 @@ import java.util.List;
 public interface FeedbackResultRepository extends JpaRepository<FeedbackResult, Long> {
     List<FeedbackResult> findByFeedbackSessionId(Long feedbackSessionId);
 
-    long countByFeedbackSessionIdAndStatus(Long feedbackSessionId, String status);
+    @Query("SELECT COUNT(fr) FROM FeedbackResult fr " +
+           "WHERE fr.feedbackSession.id = :sessionId AND fr.status = :status")
+    long countBySessionAndStatus(@Param("sessionId") Long feedbackSessionId,
+                                 @Param("status") FeedbackResult.FeedbackResultStatus status);
 
     @Query("SELECT fr FROM FeedbackResult fr " +
            "LEFT JOIN FETCH fr.persona " +
