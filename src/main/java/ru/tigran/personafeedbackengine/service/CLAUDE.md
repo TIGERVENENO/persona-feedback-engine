@@ -7,8 +7,9 @@ Business logic and orchestration layer for the application.
 
 ### AIGatewayService
 - Smart multi-provider client for AI API integration (OpenRouter, AgentRouter)
-- Uses Spring's RestClient (HTTP timeout: 30s)
-- Implements simple retry mechanism for 429 errors (rate limit)
+- Supports both **synchronous** (RestClient) and **asynchronous** (WebClient) HTTP calls
+- Synchronous calls: HTTP timeout 30s, retry logic for 429 errors only
+- Asynchronous calls: HTTP timeout 30s, retry logic for retriable errors (429, 502, 503, 504)
 - Token optimization via abbreviated JSON keys
 - Dynamic provider selection based on `app.ai.provider` configuration
 - Supports any LLM model (Claude, GPT-4o, Mistral, etc.)
@@ -18,9 +19,20 @@ Business logic and orchestration layer for the application.
 - Each provider has separate API key and model configuration
 - Models are independently configurable
 
-**Methods:**
-- `generatePersonaDetails(Long userId, String userPrompt)`: Cacheable, generates detailed persona profile (cached by userId + prompt for data isolation)
-- `generateFeedbackForProduct(String personaDescription, String productDescription)`: Generates feedback text (not cached, user-specific)
+**Synchronous Methods (blocking):**
+- `generatePersonaDetails(Long userId, String userPrompt)`: Cacheable, generates detailed persona profile (cached by userId + prompt)
+- `generateFeedbackForProduct(String personaDescription, String productDescription)`: Generates feedback text (not cached)
+
+**Asynchronous Methods (non-blocking, returns Mono):**
+- `generatePersonaDetailsAsync(Long userId, String userPrompt)`: Async persona generation with non-blocking retry logic
+- `generateFeedbackForProductAsync(String personaDescription, String productDescription)`: Async feedback generation
+
+**Async Implementation Details:**
+- Uses Spring WebFlux WebClient with Reactor Netty
+- Retry mechanism for retriable errors (429, 502, 503, 504) with exponential backoff
+- Timeout: 30 seconds per request
+- Max retries: 3 attempts
+- Non-blocking: does not block thread during network I/O
 
 ### PersonaService
 - Entry point for persona generation workflow
