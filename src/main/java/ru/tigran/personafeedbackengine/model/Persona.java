@@ -6,7 +6,10 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "personas")
+@Table(name = "personas", indexes = {
+    @Index(name = "idx_persona_user_deleted", columnList = "user_id,deleted"),
+    @Index(name = "idx_persona_status", columnList = "status")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -36,6 +39,10 @@ public class Persona {
     // Store the generation prompt for caching purposes
     @Column(columnDefinition = "TEXT")
     private String generationPrompt;
+
+    // Soft delete: помечает удаленные персоны, но сохраняет feedback историю
+    @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private Boolean deleted = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
