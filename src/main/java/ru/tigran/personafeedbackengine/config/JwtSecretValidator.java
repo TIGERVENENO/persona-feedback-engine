@@ -28,6 +28,8 @@ public class JwtSecretValidator implements ApplicationRunner {
             "123456"
     };
 
+    private static final String DEV_DEFAULT_KEY = "dev-secret-key-only-for-local-development-change-in-production";
+
     @Override
     public void run(ApplicationArguments args) {
         log.info("Validating JWT secret key configuration...");
@@ -47,6 +49,15 @@ public class JwtSecretValidator implements ApplicationRunner {
                             "Use a strong random key of at least 32 characters.",
                             MINIMUM_KEY_LENGTH, jwtSecretKey.length())
             );
+        }
+
+        // Проверка на использование дефолтного значения для dev (warning, не error)
+        if (jwtSecretKey.equals(DEV_DEFAULT_KEY)) {
+            log.warn("⚠️  WARNING: Using DEFAULT JWT secret key for local development! " +
+                    "This is NOT secure for production. " +
+                    "Set JWT_SECRET_KEY environment variable with a strong random key. " +
+                    "Generate one with: openssl rand -base64 32");
+            return;  // Разрешаем для dev, но с warning
         }
 
         // Проверка на дефолтные или небезопасные значения
