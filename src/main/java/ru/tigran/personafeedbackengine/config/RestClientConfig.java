@@ -9,7 +9,6 @@ import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
-import reactor.netty.tcp.SslProvider;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
