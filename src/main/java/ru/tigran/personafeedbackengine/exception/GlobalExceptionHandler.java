@@ -7,36 +7,35 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
+/**
+ * Global exception handler for the application.
+ * Maps all exceptions to consistent ErrorResponse format.
+ * Eliminates duplicate error handling logic by using ApplicationException base class.
+ */
 @Slf4j
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleResourceNotFound(ResourceNotFoundException e) {
-        log.warn("Resource not found: {}", e.getMessage());
-        ErrorResponse response = new ErrorResponse(e.getErrorCode(), e.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-    }
+    /**
+     * Handles all ApplicationException subtypes (ResourceNotFoundException, UnauthorizedException, etc).
+     * Determines HTTP status code and logging level based on exception type.
+     *
+     * @param e ApplicationException instance
+     * @return ResponseEntity with appropriate status and error details
+     */
+    @ExceptionHandler(ApplicationException.class)
+    public ResponseEntity<ErrorResponse> handleApplicationException(ApplicationException e) {
+        ExceptionInfo info = ExceptionInfo.forException(e);
 
-    @ExceptionHandler(UnauthorizedException.class)
-    public ResponseEntity<ErrorResponse> handleUnauthorized(UnauthorizedException e) {
-        log.warn("Unauthorized access: {}", e.getMessage());
-        ErrorResponse response = new ErrorResponse(e.getErrorCode(), e.getMessage());
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
-    }
+        // Log with appropriate level based on exception type
+        if (info.shouldLogError()) {
+            log.error("Application error: {}", e.getMessage(), e);
+        } else {
+            log.warn("Application error: {}", e.getMessage());
+        }
 
-    @ExceptionHandler(ValidationException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(ValidationException e) {
-        log.warn("Validation error: {}", e.getMessage());
         ErrorResponse response = new ErrorResponse(e.getErrorCode(), e.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-    }
-
-    @ExceptionHandler(AIGatewayException.class)
-    public ResponseEntity<ErrorResponse> handleAIGateway(AIGatewayException e) {
-        log.error("AI Gateway error: {}", e.getMessage(), e);
-        ErrorResponse response = new ErrorResponse(e.getErrorCode(), e.getMessage());
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        return ResponseEntity.status(info.status()).body(response);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

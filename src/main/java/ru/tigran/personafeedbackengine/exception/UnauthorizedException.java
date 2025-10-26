@@ -1,14 +1,11 @@
 package ru.tigran.personafeedbackengine.exception;
 
-public class UnauthorizedException extends RuntimeException {
-    private final String errorCode;
-
+/**
+ * Thrown when a user attempts to access a resource they are not authorized to access.
+ * HTTP status: 403 Forbidden
+ */
+public class UnauthorizedException extends ApplicationException {
     public UnauthorizedException(String message, String errorCode) {
-        super(message);
-        this.errorCode = errorCode;
-    }
-
-    public String getErrorCode() {
-        return errorCode;
+        super(message, errorCode);
     }
 }

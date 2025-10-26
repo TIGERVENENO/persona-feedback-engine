@@ -1,14 +1,11 @@
 package ru.tigran.personafeedbackengine.exception;
 
-public class ResourceNotFoundException extends RuntimeException {
-    private final String errorCode;
-
+/**
+ * Thrown when a requested resource (entity) is not found in the database.
+ * HTTP status: 404 Not Found
+ */
+public class ResourceNotFoundException extends ApplicationException {
     public ResourceNotFoundException(String message, String errorCode) {
-        super(message);
-        this.errorCode = errorCode;
-    }
-
-    public String getErrorCode() {
-        return errorCode;
+        super(message, errorCode);
     }
 }
