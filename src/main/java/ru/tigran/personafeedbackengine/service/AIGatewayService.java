@@ -14,6 +14,7 @@ import reactor.util.retry.Retry;
 import ru.tigran.personafeedbackengine.exception.AIGatewayException;
 import ru.tigran.personafeedbackengine.exception.ErrorCode;
 import ru.tigran.personafeedbackengine.exception.RetriableHttpException;
+import ru.tigran.personafeedbackengine.util.CacheKeyUtils;
 
 import java.time.Duration;
 
@@ -31,7 +32,8 @@ public class AIGatewayService {
     private final String agentRouterApiKey;
     private final String agentRouterModel;
     private final long agentRouterRetryDelayMs;
-    private final int maxRetries = 3;
+    private final int maxRetries;
+    private final int retryBackoffMultiplier;
 
     private static final String OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
     private static final String AGENTROUTER_API_URL = "https://api.agentrouter.ai/v1/chat/completions";
@@ -46,7 +48,9 @@ public class AIGatewayService {
             @Value("${app.openrouter.retry-delay-ms}") long openRouterRetryDelayMs,
             @Value("${app.agentrouter.api-key}") String agentRouterApiKey,
             @Value("${app.agentrouter.model}") String agentRouterModel,
-            @Value("${app.agentrouter.retry-delay-ms}") long agentRouterRetryDelayMs
+            @Value("${app.agentrouter.retry-delay-ms}") long agentRouterRetryDelayMs,
+            @Value("${app.ai.max-retries:3}") int maxRetries,
+            @Value("${app.ai.retry-backoff-multiplier:2}") int retryBackoffMultiplier
     ) {
         this.restClient = restClient;
         this.webClient = webClient;
@@ -58,6 +62,8 @@ public class AIGatewayService {
         this.agentRouterApiKey = agentRouterApiKey;
         this.agentRouterModel = agentRouterModel;
         this.agentRouterRetryDelayMs = agentRouterRetryDelayMs;
+        this.maxRetries = maxRetries;
+        this.retryBackoffMultiplier = retryBackoffMultiplier;
     }
 
     /**
@@ -79,9 +85,10 @@ public class AIGatewayService {
      * @param userPrompt Persona generation prompt
      * @return JSON string with persona details
      */
-    @Cacheable(value = "personaCache", key = "#userId + ':' + #userPrompt")
+    @Cacheable(value = "personaCache", key = "T(ru.tigran.personafeedbackengine.util.CacheKeyUtils).generatePersonaCacheKey(#userId, #userPrompt)")
     public String generatePersonaDetails(Long userId, String userPrompt) {
-        log.info("Generating persona details for prompt: {}", userPrompt);
+        String normalizedPrompt = CacheKeyUtils.normalizePrompt(userPrompt);
+        log.info("Generating persona details for normalized prompt: {}", normalizedPrompt);
 
         String systemPrompt = """
                 You are an AI persona generation expert. Generate a detailed and realistic persona based on the user's prompt.
@@ -195,7 +202,7 @@ public class AIGatewayService {
                     );
                 }
                 try {
-                    long backoffMs = retryDelayMs * (long) Math.pow(2, attempt - 1);
+                    long backoffMs = retryDelayMs * (long) Math.pow(retryBackoffMultiplier, attempt - 1);
                     log.info("Retrying after {} ms (attempt {}/{})", backoffMs, attempt, maxRetries);
                     Thread.sleep(backoffMs);
                 } catch (InterruptedException ie) {
@@ -219,7 +226,7 @@ public class AIGatewayService {
                     );
                 }
                 try {
-                    long backoffMs = retryDelayMs * (long) Math.pow(2, attempt - 1);
+                    long backoffMs = retryDelayMs * (long) Math.pow(retryBackoffMultiplier, attempt - 1);
                     log.info("Retrying after {} ms (attempt {}/{})", backoffMs, attempt, maxRetries);
                     Thread.sleep(backoffMs);
                 } catch (InterruptedException ie) {
@@ -329,7 +336,8 @@ public class AIGatewayService {
      * @return Mono с JSON строкой деталей персоны
      */
     public Mono<String> generatePersonaDetailsAsync(Long userId, String userPrompt) {
-        log.info("Generating persona details asynchronously for prompt: {}", userPrompt);
+        String normalizedPrompt = CacheKeyUtils.normalizePrompt(userPrompt);
+        log.info("Generating persona details asynchronously for normalized prompt: {}", normalizedPrompt);
 
         String systemPrompt = """
                 You are an AI persona generation expert. Generate a detailed and realistic persona based on the user's prompt.
