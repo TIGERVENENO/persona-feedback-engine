@@ -124,17 +124,9 @@ public class FeedbackTaskConsumer {
                 return;
             }
 
-            long completedCount = feedbackResultRepository.countBySessionAndStatus(
-                    sessionId,
-                    FeedbackResult.FeedbackResultStatus.COMPLETED
-            );
-            long failedCount = feedbackResultRepository.countBySessionAndStatus(
-                    sessionId,
-                    FeedbackResult.FeedbackResultStatus.FAILED
-            );
-            long totalCount = feedbackResultRepository.findByFeedbackSessionId(sessionId).size();
+            var statusInfo = feedbackResultRepository.getSessionStatus(sessionId);
 
-            if (completedCount + failedCount >= totalCount) {
+            if (statusInfo.completed() + statusInfo.failed() >= statusInfo.total()) {
                 int updated = feedbackSessionRepository.updateStatusIfNotAlready(
                         sessionId,
                         FeedbackSession.FeedbackSessionStatus.COMPLETED
