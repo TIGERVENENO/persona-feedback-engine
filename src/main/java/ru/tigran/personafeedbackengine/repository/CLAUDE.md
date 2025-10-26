@@ -31,6 +31,7 @@ Spring Data JPA repositories for database access.
 - Extends `JpaRepository<FeedbackResult, Long>`
 - Custom methods:
   - `findByFeedbackSessionId(Long sessionId)` - Fetch all results for a session
+  - `findByFeedbackSessionIdWithDetails(Long sessionId)` - Fetch results with eager loading of Persona and Product (LEFT JOIN FETCH)
   - `countByFeedbackSessionIdAndStatus(Long sessionId, String status)` - Check completion
 
 ## Design Notes
