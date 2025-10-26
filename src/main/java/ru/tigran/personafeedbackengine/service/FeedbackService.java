@@ -113,7 +113,8 @@ public class FeedbackService {
         FeedbackSession savedSession = feedbackSessionRepository.save(session);
         log.info("Created feedback session with id {}", savedSession.getId());
 
-        // Create FeedbackResult entities and publish tasks
+        // Create FeedbackResult entities (batch insert)
+        List<FeedbackResult> results = new ArrayList<>();
         for (Product product : products) {
             for (Persona persona : personas) {
                 FeedbackResult result = new FeedbackResult();
@@ -121,24 +122,28 @@ public class FeedbackService {
                 result.setProduct(product);
                 result.setPersona(persona);
                 result.setStatus(FeedbackResult.FeedbackResultStatus.PENDING);
-
-                FeedbackResult savedResult = feedbackResultRepository.save(result);
-                log.info("Created feedback result with id {}", savedResult.getId());
-
-                // Publish task to queue
-                FeedbackGenerationTask task = new FeedbackGenerationTask(
-                        savedResult.getId(),
-                        product.getId(),
-                        persona.getId()
-                );
-                rabbitTemplate.convertAndSend(
-                        RabbitMQConfig.EXCHANGE_NAME,
-                        "feedback.generation",
-                        task
-                );
-                log.info("Published feedback generation task for result {}", savedResult.getId());
+                results.add(result);
             }
         }
+
+        // Batch insert all results
+        List<FeedbackResult> savedResults = feedbackResultRepository.saveAll(results);
+        log.info("Batch created {} feedback results for session {}", savedResults.size(), savedSession.getId());
+
+        // Publish all tasks to queue
+        for (FeedbackResult savedResult : savedResults) {
+            FeedbackGenerationTask task = new FeedbackGenerationTask(
+                    savedResult.getId(),
+                    savedResult.getProduct().getId(),
+                    savedResult.getPersona().getId()
+            );
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConfig.EXCHANGE_NAME,
+                    "feedback.generation",
+                    task
+            );
+        }
+        log.info("Published {} feedback generation tasks for session {}", savedResults.size(), savedSession.getId());
 
         return savedSession.getId();
     }
