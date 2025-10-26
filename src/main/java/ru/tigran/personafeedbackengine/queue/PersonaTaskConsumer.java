@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.tigran.personafeedbackengine.config.RabbitMQConfig;
 import ru.tigran.personafeedbackengine.dto.PersonaGenerationTask;
+import ru.tigran.personafeedbackengine.exception.AIGatewayException;
 import ru.tigran.personafeedbackengine.exception.ResourceNotFoundException;
 import ru.tigran.personafeedbackengine.model.Persona;
 import ru.tigran.personafeedbackengine.repository.PersonaRepository;
@@ -54,13 +55,17 @@ public class PersonaTaskConsumer {
             // Parse the JSON response
             JsonNode details = objectMapper.readTree(personaDetailsJson);
 
+            // ✅ Валидация обязательных полей перед парсингом
+            validatePersonaDetails(details);
+
             // Update Persona entity with generated details
             persona.setName(details.get("nm").asText());
             persona.setDetailedDescription(details.get("dd").asText());
             persona.setGender(details.get("g").asText());
             persona.setAgeGroup(details.get("ag").asText());
             persona.setRace(details.get("r").asText());
-            persona.setAvatarUrl(details.get("au").asText());
+            // ✅ Безопасное обращение к опциональному полю
+            persona.setAvatarUrl(details.has("au") ? details.get("au").asText("") : "");
             persona.setStatus(Persona.PersonaStatus.ACTIVE);
 
             personaRepository.save(persona);
@@ -78,6 +83,41 @@ public class PersonaTaskConsumer {
                 }
             } catch (Exception innerE) {
                 log.error("Failed to mark persona as FAILED", innerE);
+            }
+        }
+    }
+
+    /**
+     * Validates that all required fields are present in the AI persona response JSON.
+     *
+     * Required fields:
+     * - nm: Persona name
+     * - dd: Detailed description
+     * - g: Gender
+     * - ag: Age group
+     * - r: Race/ethnicity
+     *
+     * Optional field:
+     * - au: Avatar URL
+     *
+     * @param details JsonNode with persona details from AI
+     * @throws AIGatewayException if any required field is missing or null
+     */
+    private void validatePersonaDetails(JsonNode details) {
+        String[] requiredFields = {"nm", "dd", "g", "ag", "r"};
+
+        for (String field : requiredFields) {
+            if (!details.has(field) || details.get(field).isNull()) {
+                String message = String.format(
+                    "Missing or null required field in AI response: '%s'. " +
+                    "Expected JSON structure: {\"nm\": \"...\", \"dd\": \"...\", \"g\": \"...\", \"ag\": \"...\", \"r\": \"...\", \"au\": \"...\"}",
+                    field
+                );
+                log.error("Persona validation failed: {}", message);
+                throw new AIGatewayException(
+                    message,
+                    "INVALID_AI_RESPONSE"
+                );
             }
         }
     }
