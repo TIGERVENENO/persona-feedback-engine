@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import ru.tigran.personafeedbackengine.dto.FeedbackSessionRequest;
 import ru.tigran.personafeedbackengine.dto.FeedbackSessionResponse;
@@ -62,21 +63,32 @@ public class FeedbackController {
     }
 
     /**
-     * Polls for feedback session status and results.
-     * Returns the current session status and all associated feedback results.
+     * Polls for feedback session status and results with optional pagination.
+     * Returns the current session status and associated feedback results.
+     * If page and size parameters are provided, returns paginated results.
+     * If not provided, returns all results (cached).
      *
      * @param userId user ID from X-User-Id header
      * @param sessionId feedback session ID
+     * @param page page number (0-based), optional
+     * @param size page size, optional
      * @return FeedbackSessionResponse with status and feedback results
      */
     @GetMapping("/{sessionId}")
     public ResponseEntity<FeedbackSessionResponse> getFeedbackSession(
             @RequestHeader("X-User-Id") Long userId,
-            @PathVariable Long sessionId
+            @PathVariable Long sessionId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
     ) {
-        log.info("GET /api/v1/feedback-sessions/{} - user: {}", sessionId, userId);
+        log.info("GET /api/v1/feedback-sessions/{} - user: {}, page: {}, size: {}", sessionId, userId, page, size);
 
-        FeedbackSessionResponse response = feedbackQueryService.getFeedbackSessionCached(userId, sessionId);
+        FeedbackSessionResponse response;
+        if (page != null && size != null) {
+            response = feedbackQueryService.getFeedbackSessionPaginated(userId, sessionId, page, size);
+        } else {
+            response = feedbackQueryService.getFeedbackSessionCached(userId, sessionId);
+        }
 
         return ResponseEntity.ok(response);
     }

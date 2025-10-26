@@ -39,6 +39,9 @@ Data transfer objects for API layer and message queue communication.
 - `status: String`
 - `createdAt: LocalDateTime`
 - `feedbackResults: List<FeedbackResultDTO>`
+- `pageNumber: Integer` (nullable) - 0-based page number when paginated, null if all results
+- `pageSize: Integer` (nullable) - page size when paginated, null if all results
+- `totalCount: Long` (nullable) - total count of feedback results, null if all results returned
 
 ### FeedbackResultDTO
 - `id: Long`

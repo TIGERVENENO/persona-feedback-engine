@@ -18,9 +18,11 @@ REST API endpoints for client interaction.
   - Request: `FeedbackSessionRequest`
   - Response: `JobResponse` with session ID and initial status
   - Validates product/persona ownership, counts, and existence
-- **GET /api/v1/feedback-sessions/{jobId}**: Poll for session status/results
-  - Response: `FeedbackSessionResponse` with nested FeedbackResults
-  - Returns current status and available feedback results
+- **GET /api/v1/feedback-sessions/{sessionId}**: Poll for session status/results with optional pagination
+  - Query parameters (optional): `page` (0-based page number), `size` (page size)
+  - Response: `FeedbackSessionResponse` with nested FeedbackResults and pagination metadata
+  - If page/size provided: returns paginated results with pageNumber, pageSize, totalCount
+  - If no pagination params: returns all results cached, pagination metadata is null
 
 ## Request Validation
 - All endpoints extract user ID from `X-User-Id` header
