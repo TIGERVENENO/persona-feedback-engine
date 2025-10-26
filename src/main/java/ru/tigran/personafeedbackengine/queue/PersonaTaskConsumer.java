@@ -49,6 +49,20 @@ public class PersonaTaskConsumer {
                             "PERSONA_NOT_FOUND"
                     ));
 
+            if (persona.getStatus() == Persona.PersonaStatus.ACTIVE) {
+                log.info("Persona {} already processed, skipping", persona.getId());
+                return;
+            }
+
+            if (persona.getStatus() == Persona.PersonaStatus.FAILED) {
+                log.warn("Persona {} previously failed, retrying", persona.getId());
+            }
+
+            if (persona.getStatus() != Persona.PersonaStatus.GENERATING) {
+                log.warn("Unexpected persona status for {}: {}", persona.getId(), persona.getStatus());
+                return;
+            }
+
             // Generate persona details via AI (cached by prompt)
             String personaDetailsJson = aiGatewayService.generatePersonaDetails(task.userPrompt());
 

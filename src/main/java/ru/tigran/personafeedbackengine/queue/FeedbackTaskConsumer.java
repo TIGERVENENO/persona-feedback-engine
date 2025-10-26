@@ -59,6 +59,15 @@ public class FeedbackTaskConsumer {
                             "FEEDBACK_RESULT_NOT_FOUND"
                     ));
 
+            if (result.getStatus() == FeedbackResult.FeedbackResultStatus.COMPLETED) {
+                log.info("FeedbackResult {} already completed, skipping", result.getId());
+                return;
+            }
+
+            if (result.getStatus() == FeedbackResult.FeedbackResultStatus.FAILED) {
+                log.warn("FeedbackResult {} previously failed, retrying", result.getId());
+            }
+
             result.setStatus(FeedbackResult.FeedbackResultStatus.IN_PROGRESS);
             feedbackResultRepository.save(result);
 
