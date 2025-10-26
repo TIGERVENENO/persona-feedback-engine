@@ -14,19 +14,46 @@ public class RabbitMQConfig {
     public static final String FEEDBACK_GENERATION_QUEUE = "feedback.generation.queue";
     public static final String EXCHANGE_NAME = "persona-feedback-exchange";
 
+    public static final String PERSONA_DLQ = "persona.generation.dlq";
+    public static final String FEEDBACK_DLQ = "feedback.generation.dlq";
+    public static final String DLX_EXCHANGE_NAME = "persona-feedback-dlx";
+
     @Bean
     public Queue personaGenerationQueue() {
-        return new Queue(PERSONA_GENERATION_QUEUE, true);
+        return new org.springframework.amqp.core.QueueBuilder(PERSONA_GENERATION_QUEUE)
+                .durable(true)
+                .deadLetterExchange(DLX_EXCHANGE_NAME)
+                .deadLetterRoutingKey("persona.generation.dlq")
+                .build();
     }
 
     @Bean
     public Queue feedbackGenerationQueue() {
-        return new Queue(FEEDBACK_GENERATION_QUEUE, true);
+        return new org.springframework.amqp.core.QueueBuilder(FEEDBACK_GENERATION_QUEUE)
+                .durable(true)
+                .deadLetterExchange(DLX_EXCHANGE_NAME)
+                .deadLetterRoutingKey("feedback.generation.dlq")
+                .build();
     }
 
     @Bean
     public DirectExchange exchange() {
         return new DirectExchange(EXCHANGE_NAME, true, false);
+    }
+
+    @Bean
+    public DirectExchange dlxExchange() {
+        return new DirectExchange(DLX_EXCHANGE_NAME, true, false);
+    }
+
+    @Bean
+    public Queue personaDLQ() {
+        return new Queue(PERSONA_DLQ, true);
+    }
+
+    @Bean
+    public Queue feedbackDLQ() {
+        return new Queue(FEEDBACK_DLQ, true);
     }
 
     @Bean
@@ -41,5 +68,19 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(feedbackGenerationQueue)
                 .to(exchange)
                 .with("feedback.generation");
+    }
+
+    @Bean
+    public Binding personaDLQBinding(Queue personaDLQ, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(personaDLQ)
+                .to(dlxExchange)
+                .with("persona.generation.dlq");
+    }
+
+    @Bean
+    public Binding feedbackDLQBinding(Queue feedbackDLQ, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(feedbackDLQ)
+                .to(dlxExchange)
+                .with("feedback.generation.dlq");
     }
 }
