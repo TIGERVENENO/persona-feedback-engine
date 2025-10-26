@@ -19,8 +19,8 @@ Business logic and orchestration layer for the application.
 - Models are independently configurable
 
 **Methods:**
-- `generatePersonaDetails(String userPrompt)`: Cacheable, generates detailed persona profile (cached by prompt)
-- `generateFeedbackForProduct(String personaDescription, String productDescription)`: Generates feedback text
+- `generatePersonaDetails(Long userId, String userPrompt)`: Cacheable, generates detailed persona profile (cached by userId + prompt for data isolation)
+- `generateFeedbackForProduct(String personaDescription, String productDescription)`: Generates feedback text (not cached, user-specific)
 
 ### PersonaService
 - Entry point for persona generation workflow
