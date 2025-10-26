@@ -1,0 +1,161 @@
+version: '3.9'
+
+services:
+  # ============================================================================
+  # PostgreSQL 16 - Primary Database
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: persona-feedback-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-personadb}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c max_connections=200"
+    ports:
+      - "5432:5432"
+    volumes:
+      # Persistent volume for database data
+      # Database schema is managed by Flyway migrations (not by init scripts)
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - persona-feedback-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-personadb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ============================================================================
+  # Redis 7 - Caching Layer & Session Store
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: persona-feedback-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redispass}
+    ports:
+      - "6379:6379"
+    volumes:
+      # Persistent volume for Redis data (AOF)
+      - redis_data:/data
+    networks:
+      - persona-feedback-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ============================================================================
+  # RabbitMQ 3 - Message Queue for Async Task Processing
+  # ============================================================================
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: persona-feedback-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+    ports:
+      # AMQP port for application connections
+      - "5672:5672"
+      # Management UI port (accessible at http://localhost:15672)
+      - "15672:15672"
+    volumes:
+      # Persistent volume for RabbitMQ data
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - persona-feedback-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ============================================================================
+  # Optional: pgAdmin for Database Administration (commented out by default)
+  # ============================================================================
+  # Uncomment below to enable pgAdmin for easier database management
+  # pgadmin:
+  #   image: dpage/pgadmin4:latest
+  #   container_name: persona-feedback-pgadmin
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: admin@example.com
+  #     PGADMIN_DEFAULT_PASSWORD: admin
+  #   ports:
+  #     - "5050:80"
+  #   volumes:
+  #     - pgadmin_data:/var/lib/pgadmin
+  #   networks:
+  #     - persona-feedback-network
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  persona-feedback-network:
+    driver: bridge
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  # pgadmin_data:
+  #   driver: local
+
+# ============================================================================
+# Usage Instructions
+# ============================================================================
+# 1. Create .env file from .env.example:
+#    cp .env.example .env
+#
+# 2. Start all services:
+#    docker-compose up -d
+#
+# 3. Verify services are running:
+#    docker-compose ps
+#
+# 4. View logs:
+#    docker-compose logs -f
+#
+# 5. Stop services:
+#    docker-compose down
+#
+# 6. Remove volumes (WARNING: deletes all data):
+#    docker-compose down -v
+#
+# ============================================================================
+# Service Access
+# ============================================================================
+# PostgreSQL: localhost:5432
+#   - Database: personadb
+#   - User: postgres
+#   - Password: (from .env)
+#
+# Redis: localhost:6379
+#   - Password: (from .env)
+#   - Use: redis-cli -p 6379 -a <password>
+#
+# RabbitMQ: localhost:5672 (AMQP)
+#   - Management UI: http://localhost:15672
+#   - User: guest
+#   - Password: (from .env)
+#
+# Spring Boot Application: localhost:8080
+#   - Application Profile: docker
+#   - Configures all services to use Docker hostnames
+#
+# ============================================================================

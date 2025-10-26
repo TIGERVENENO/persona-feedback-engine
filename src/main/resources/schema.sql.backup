@@ -1,0 +1,198 @@
+-- ============================================================================
+-- Persona Feedback Engine - PostgreSQL Database Schema
+-- ============================================================================
+-- This script defines the complete database schema for the persona feedback engine.
+-- It includes all tables, relationships, constraints, and indexes for optimal performance.
+--
+-- Tables created in dependency order to ensure foreign key integrity.
+-- ============================================================================
+
+-- ============================================================================
+-- USERS TABLE
+-- ============================================================================
+-- Stores user/marketer profiles with JWT authentication.
+-- Primary entity for data isolation and multi-tenancy.
+-- Root aggregate in the domain model.
+-- Uses email-based authentication (no username field).
+CREATE TABLE IF NOT EXISTS users (
+    id BIGSERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(60) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+    deleted BOOLEAN DEFAULT FALSE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_user_email ON users(email);
+CREATE INDEX idx_user_deleted ON users(deleted);
+
+COMMENT ON TABLE users IS 'Platform users/marketers who create personas and run feedback sessions';
+COMMENT ON COLUMN users.id IS 'Unique identifier for the user';
+COMMENT ON COLUMN users.email IS 'Unique email address for authentication and communication';
+COMMENT ON COLUMN users.password_hash IS 'BCrypt hashed password (60 characters, work factor 10)';
+COMMENT ON COLUMN users.is_active IS 'Account active status (default: true)';
+COMMENT ON COLUMN users.deleted IS 'Soft delete flag (default: false)';
+COMMENT ON COLUMN users.created_at IS 'Timestamp when user was created';
+COMMENT ON COLUMN users.updated_at IS 'Timestamp when user was last modified';
+
+-- ============================================================================
+-- PRODUCTS TABLE
+-- ============================================================================
+-- Stores products/services that need feedback.
+-- Each product belongs to a specific user and can receive feedback from multiple personas.
+CREATE TABLE IF NOT EXISTS products (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    user_id BIGINT NOT NULL,
+    deleted BOOLEAN DEFAULT FALSE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_products_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_products_user_id ON products(user_id);
+CREATE INDEX idx_products_user_id_id ON products(user_id, id);
+CREATE INDEX idx_product_user_deleted ON products(user_id, deleted);
+
+COMMENT ON TABLE products IS 'Products/services that receive feedback from personas';
+COMMENT ON COLUMN products.id IS 'Unique identifier for the product';
+COMMENT ON COLUMN products.name IS 'Product name or title';
+COMMENT ON COLUMN products.description IS 'Detailed product description for persona context';
+COMMENT ON COLUMN products.user_id IS 'Owner user ID - enables multi-tenant data isolation';
+COMMENT ON COLUMN products.created_at IS 'Timestamp when product was created';
+COMMENT ON COLUMN products.updated_at IS 'Timestamp when product was last modified';
+
+-- ============================================================================
+-- PERSONAS TABLE
+-- ============================================================================
+-- Stores AI-generated persona profiles.
+-- Each persona is owned by a user and can be reused across multiple feedback sessions.
+-- Statuses: GENERATING (initial), ACTIVE (ready for use), FAILED (generation failed).
+-- Personas are cached by generation_prompt for reusability within the application.
+CREATE TABLE IF NOT EXISTS personas (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    detailed_description TEXT,
+    gender VARCHAR(50),
+    age_group VARCHAR(50),
+    race VARCHAR(100),
+    avatar_url VARCHAR(500),
+    status VARCHAR(20) NOT NULL DEFAULT 'GENERATING',
+    generation_prompt TEXT NOT NULL,
+    user_id BIGINT NOT NULL,
+    deleted BOOLEAN DEFAULT FALSE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_personas_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT chk_personas_status CHECK (status IN ('GENERATING', 'ACTIVE', 'FAILED'))
+);
+
+CREATE INDEX idx_personas_user_id ON personas(user_id);
+CREATE INDEX idx_personas_user_id_id ON personas(user_id, id);
+CREATE INDEX idx_personas_status ON personas(status);
+CREATE INDEX idx_persona_user_deleted ON personas(user_id, deleted);
+
+COMMENT ON TABLE personas IS 'AI-generated personas for providing product feedback';
+COMMENT ON COLUMN personas.id IS 'Unique identifier for the persona';
+COMMENT ON COLUMN personas.name IS 'Persona name generated by AI';
+COMMENT ON COLUMN personas.detailed_description IS 'Comprehensive persona profile (background, interests, behaviors)';
+COMMENT ON COLUMN personas.gender IS 'Persona gender characteristic';
+COMMENT ON COLUMN personas.age_group IS 'Age range (e.g., 25-35, 45-55)';
+COMMENT ON COLUMN personas.race IS 'Demographic characteristic';
+COMMENT ON COLUMN personas.avatar_url IS 'URL to avatar image (optional)';
+COMMENT ON COLUMN personas.status IS 'Generation status: GENERATING, ACTIVE, or FAILED';
+COMMENT ON COLUMN personas.generation_prompt IS 'Original prompt used to generate the persona - used as cache key';
+COMMENT ON COLUMN personas.user_id IS 'Owner user ID';
+COMMENT ON COLUMN personas.created_at IS 'Timestamp when persona generation was initiated';
+COMMENT ON COLUMN personas.updated_at IS 'Timestamp when persona was last updated';
+
+-- ============================================================================
+-- FEEDBACK_SESSIONS TABLE
+-- ============================================================================
+-- Stores feedback session metadata.
+-- Each session contains multiple feedback results (one per product-persona pair).
+-- Statuses: PENDING (initial), IN_PROGRESS (processing), COMPLETED (all results done), FAILED (error occurred).
+CREATE TABLE IF NOT EXISTS feedback_sessions (
+    id BIGSERIAL PRIMARY KEY,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    user_id BIGINT NOT NULL,
+    CONSTRAINT fk_feedback_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT chk_feedback_sessions_status CHECK (status IN ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED'))
+);
+
+CREATE INDEX idx_feedback_sessions_user_id ON feedback_sessions(user_id);
+CREATE INDEX idx_feedback_sessions_user_id_id ON feedback_sessions(user_id, id);
+CREATE INDEX idx_feedback_sessions_status ON feedback_sessions(status);
+CREATE INDEX idx_feedback_sessions_created_at ON feedback_sessions(created_at DESC);
+
+COMMENT ON TABLE feedback_sessions IS 'Feedback session containers - groups multiple feedback results';
+COMMENT ON COLUMN feedback_sessions.id IS 'Unique identifier for the session';
+COMMENT ON COLUMN feedback_sessions.status IS 'Session status: PENDING, IN_PROGRESS, COMPLETED, or FAILED';
+COMMENT ON COLUMN feedback_sessions.created_at IS 'Timestamp when session was created';
+COMMENT ON COLUMN feedback_sessions.updated_at IS 'Timestamp when session was last updated';
+COMMENT ON COLUMN feedback_sessions.user_id IS 'Owner user ID';
+
+-- ============================================================================
+-- FEEDBACK_RESULTS TABLE
+-- ============================================================================
+-- Stores individual feedback from one persona on one product.
+-- Each feedback result represents one persona-product feedback pair within a session.
+-- Statuses: PENDING (queued), IN_PROGRESS (processing), COMPLETED (feedback generated), FAILED (generation failed).
+-- Foreign keys: No cascade delete on product/persona to maintain referential integrity of feedback history.
+CREATE TABLE IF NOT EXISTS feedback_results (
+    id BIGSERIAL PRIMARY KEY,
+    feedback_text TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    feedback_session_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
+    persona_id BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_feedback_results_session FOREIGN KEY (feedback_session_id) REFERENCES feedback_sessions(id) ON DELETE CASCADE,
+    CONSTRAINT fk_feedback_results_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_feedback_results_persona FOREIGN KEY (persona_id) REFERENCES personas(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_feedback_results_status CHECK (status IN ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED')),
+    CONSTRAINT unq_feedback_results_pair UNIQUE(feedback_session_id, product_id, persona_id)
+);
+
+CREATE INDEX idx_feedback_results_session_id ON feedback_results(feedback_session_id);
+CREATE INDEX idx_feedback_results_product_id ON feedback_results(product_id);
+CREATE INDEX idx_feedback_results_persona_id ON feedback_results(persona_id);
+CREATE INDEX idx_feedback_results_status ON feedback_results(status);
+CREATE INDEX idx_feedback_results_session_status ON feedback_results(feedback_session_id, status);
+CREATE INDEX idx_feedback_results_session_product_persona ON feedback_results(feedback_session_id, product_id, persona_id);
+
+CREATE INDEX idx_personas_user_status ON personas(user_id, status);
+CREATE INDEX idx_feedback_sessions_user_status ON feedback_sessions(user_id, status);
+
+COMMENT ON TABLE feedback_results IS 'Individual feedback entries from personas on products within sessions';
+COMMENT ON COLUMN feedback_results.id IS 'Unique identifier for the feedback result';
+COMMENT ON COLUMN feedback_results.feedback_text IS 'Generated feedback text from the persona';
+COMMENT ON COLUMN feedback_results.status IS 'Processing status: PENDING, IN_PROGRESS, COMPLETED, or FAILED';
+COMMENT ON COLUMN feedback_results.feedback_session_id IS 'Parent session ID - cascades on delete';
+COMMENT ON COLUMN feedback_results.product_id IS 'Product being reviewed - restricted delete to preserve history';
+COMMENT ON COLUMN feedback_results.persona_id IS 'Persona providing feedback - restricted delete to preserve history';
+COMMENT ON COLUMN feedback_results.created_at IS 'Timestamp when feedback result was created';
+COMMENT ON COLUMN feedback_results.updated_at IS 'Timestamp when feedback was last updated';
+
+-- ============================================================================
+-- PERFORMANCE INDEXES SUMMARY
+-- ============================================================================
+-- The following indexes are created for optimal query performance:
+-- 1. Primary key indexes (automatic)
+-- 2. Foreign key indexes (for JOIN operations)
+-- 3. user_id indexes on all tenant-scoped tables (for data isolation queries)
+-- 4. Composite indexes (user_id, id) for ownership validation queries
+-- 5. Status indexes (for filtering by workflow state)
+-- 6. Timestamp indexes (for date-range queries and sorting)
+-- 7. Unique constraint indexes (for lookups by username/email)
+--
+-- These indexes balance write performance and query speed for the typical workload:
+-- - Frequent reads by (user_id, entity_id) pairs
+-- - Filtering by status for async task processing
+-- - Pagination with timestamp ordering
+-- ============================================================================

@@ -1,0 +1,1 @@
+-- Data initialization is handled by Flyway migrations
