@@ -38,6 +38,16 @@ Includes startup validators to ensure critical configuration is present.
 - Supports multiple AI providers (OpenRouter, AgentRouter)
 - Logs validation results
 
+### JwtSecretValidator
+- Implements `ApplicationRunner` to validate JWT secret key at startup
+- Validates JWT secret key configuration:
+  - Minimum length: 32 characters (HMAC-SHA256 requirement)
+  - Not null or empty
+  - Not using forbidden/default values (e.g., "secret", "changeme", "test")
+- Prevents application start with insecure or default JWT secret key
+- Logs validation results with key length
+- Recommended key generation: `openssl rand -base64 32`
+
 ### RedissonConfig
 - Configures Redisson client for distributed locking and advanced Redis features
 - Auto-detects Redis host, port, and password from Spring Data Redis configuration

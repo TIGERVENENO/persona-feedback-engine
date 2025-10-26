@@ -24,6 +24,11 @@ public enum ErrorCode {
     PERSONAS_NOT_READY("PERSONAS_NOT_READY", "Some personas are not ready for use"),
     DUPLICATE_REQUEST("DUPLICATE_REQUEST", "Duplicate request detected"),
 
+    // Authentication errors
+    EMAIL_ALREADY_EXISTS("EMAIL_ALREADY_EXISTS", "Email already registered"),
+    INVALID_CREDENTIALS("INVALID_CREDENTIALS", "Invalid email or password"),
+    USER_INACTIVE("USER_INACTIVE", "User account is inactive or deleted"),
+
     // AI service errors
     AI_SERVICE_ERROR("AI_SERVICE_ERROR", "AI service error"),
     INVALID_AI_RESPONSE("INVALID_AI_RESPONSE", "Invalid response from AI service"),
