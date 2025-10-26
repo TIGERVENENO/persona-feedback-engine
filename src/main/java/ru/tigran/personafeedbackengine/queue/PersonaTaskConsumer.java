@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.requeue.AmqpRejectAndDontRequeueException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.tigran.personafeedbackengine.config.RabbitMQConfig;
@@ -21,15 +23,18 @@ public class PersonaTaskConsumer {
     private final PersonaRepository personaRepository;
     private final AIGatewayService aiGatewayService;
     private final ObjectMapper objectMapper;
+    private final RabbitTemplate rabbitTemplate;
 
     public PersonaTaskConsumer(
             PersonaRepository personaRepository,
             AIGatewayService aiGatewayService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            RabbitTemplate rabbitTemplate
     ) {
         this.personaRepository = personaRepository;
         this.aiGatewayService = aiGatewayService;
         this.objectMapper = objectMapper;
+        this.rabbitTemplate = rabbitTemplate;
     }
 
     /**
@@ -88,7 +93,7 @@ public class PersonaTaskConsumer {
 
         } catch (Exception e) {
             log.error("Error processing persona generation task for persona {}", task.personaId(), e);
-            // Mark persona as FAILED
+
             try {
                 Persona persona = personaRepository.findById(task.personaId()).orElse(null);
                 if (persona != null) {
@@ -99,6 +104,10 @@ public class PersonaTaskConsumer {
             } catch (Exception innerE) {
                 log.error("Failed to mark persona as FAILED", innerE);
             }
+
+            throw new AmqpRejectAndDontRequeueException(
+                "Failed to process persona generation task for persona " + task.personaId(), e
+            );
         }
     }
 
