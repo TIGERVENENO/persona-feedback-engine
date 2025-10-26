@@ -52,7 +52,8 @@ public class AIGatewayService {
 
     /**
      * Generates detailed persona information from a user prompt.
-     * This method is cacheable by prompt to enable persona reusability.
+     * This method is cacheable by userId + prompt to isolate data between users
+     * while enabling persona reusability within the same user.
      *
      * Expected response structure:
      * {
@@ -63,9 +64,13 @@ public class AIGatewayService {
      *   "r": "race",
      *   "au": "avatar url"
      * }
+     *
+     * @param userId User ID for cache isolation (ensures data privacy)
+     * @param userPrompt Persona generation prompt
+     * @return JSON string with persona details
      */
-    @Cacheable(value = "personaCache", key = "#userPrompt")
-    public String generatePersonaDetails(String userPrompt) {
+    @Cacheable(value = "personaCache", key = "#userId + ':' + #userPrompt")
+    public String generatePersonaDetails(Long userId, String userPrompt) {
         log.info("Generating persona details for prompt: {}", userPrompt);
 
         String systemPrompt = """

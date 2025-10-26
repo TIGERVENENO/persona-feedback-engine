@@ -63,8 +63,11 @@ public class PersonaTaskConsumer {
                 return;
             }
 
-            // Generate persona details via AI (cached by prompt)
-            String personaDetailsJson = aiGatewayService.generatePersonaDetails(task.userPrompt());
+            // Generate persona details via AI (cached by userId + prompt)
+            String personaDetailsJson = aiGatewayService.generatePersonaDetails(
+                    persona.getUser().getId(),
+                    task.userPrompt()
+            );
 
             // Parse the JSON response
             JsonNode details = objectMapper.readTree(personaDetailsJson);
