@@ -6,11 +6,15 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "feedback_results")
+@Table(name = "feedback_results", indexes = {
+    @Index(name = "idx_feedback_result_session", columnList = "feedback_session_id"),
+    @Index(name = "idx_feedback_result_product_persona", columnList = "product_id, persona_id"),
+    @Index(name = "idx_feedback_result_status", columnList = "status")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class FeedbackResult {
+public class FeedbackResult extends AuditableEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

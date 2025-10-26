@@ -79,7 +79,7 @@ public class FeedbackQueryService {
      * @param sessionId Session ID
      * @param page Page number (0-based)
      * @param size Page size
-     * @return Page of FeedbackResultDTOs
+     * @return FeedbackSessionResponse with pagination metadata
      */
     @Transactional(readOnly = true)
     public FeedbackSessionResponse getFeedbackSessionPaginated(Long userId, Long sessionId, int page, int size) {
@@ -108,7 +108,10 @@ public class FeedbackQueryService {
                 session.getId(),
                 session.getStatus().name(),
                 session.getCreatedAt(),
-                resultDTOs
+                resultDTOs,
+                page,
+                size,
+                resultsPage.getTotalElements()
         );
     }
 
