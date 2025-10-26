@@ -8,13 +8,19 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 import ru.tigran.personafeedbackengine.exception.AIGatewayException;
+
+import java.time.Duration;
 
 @Slf4j
 @Service
 public class AIGatewayService {
 
     private final RestClient restClient;
+    private final WebClient webClient;
     private final ObjectMapper objectMapper;
     private final String provider;
     private final String openRouterApiKey;
@@ -30,6 +36,7 @@ public class AIGatewayService {
 
     public AIGatewayService(
             RestClient restClient,
+            WebClient webClient,
             ObjectMapper objectMapper,
             @Value("${app.ai.provider}") String provider,
             @Value("${app.openrouter.api-key}") String openRouterApiKey,
@@ -40,6 +47,7 @@ public class AIGatewayService {
             @Value("${app.agentrouter.retry-delay-ms}") long agentRouterRetryDelayMs
     ) {
         this.restClient = restClient;
+        this.webClient = webClient;
         this.objectMapper = objectMapper;
         this.provider = provider;
         this.openRouterApiKey = openRouterApiKey;
@@ -238,6 +246,129 @@ public class AIGatewayService {
             objectMapper.readTree(json);
         } catch (Exception e) {
             throw new AIGatewayException("Invalid JSON in response: " + e.getMessage(), "AI_SERVICE_ERROR", e);
+        }
+    }
+
+    /**
+     * Асинхронная версия generatePersonaDetails - используется в consumers для неблокирующей обработки.
+     * Возвращает Mono<String> для асинхронного потока обработки.
+     *
+     * @param userId User ID для изоляции кеша
+     * @param userPrompt Промпт для генерации персоны
+     * @return Mono с JSON строкой деталей персоны
+     */
+    public Mono<String> generatePersonaDetailsAsync(Long userId, String userPrompt) {
+        log.info("Generating persona details asynchronously for prompt: {}", userPrompt);
+
+        String systemPrompt = """
+                You are an AI persona generation expert. Generate a detailed and realistic persona based on the user's prompt.
+                Return ONLY valid JSON (no markdown, no extra text) with abbreviated keys to minimize tokens:
+                {
+                  "nm": "persona name (string)",
+                  "dd": "detailed description (2-3 sentences about background, interests, behaviors)",
+                  "g": "gender (string)",
+                  "ag": "age group (e.g., '25-35', '45-55')",
+                  "r": "race/ethnicity (string)",
+                  "au": "avatar url placeholder (string, can be empty)"
+                }""";
+
+        String userMessage = "Create a persona based on this description: " + userPrompt;
+
+        return callAIProviderAsync(systemPrompt, userMessage)
+                .doOnNext(response -> validateJSON(response))
+                .doOnError(error -> log.error("Error during async persona generation", error));
+    }
+
+    /**
+     * Асинхронная версия generateFeedbackForProduct.
+     *
+     * @param personaDescription Описание персоны
+     * @param productDescription Описание продукта
+     * @return Mono с текстом обратной связи
+     */
+    public Mono<String> generateFeedbackForProductAsync(String personaDescription, String productDescription) {
+        log.info("Generating feedback for product asynchronously");
+
+        String systemPrompt = """
+                You are a realistic product reviewer embodying a specific persona.
+                Generate authentic, constructive feedback from the perspective of the given persona.
+                Return ONLY the feedback text (no JSON, no labels, no extra formatting).""";
+
+        String userMessage = String.format(
+                "Persona: %s\n\nProduct: %s\n\nProvide your honest feedback on this product:",
+                personaDescription, productDescription
+        );
+
+        return callAIProviderAsync(systemPrompt, userMessage)
+                .map(String::trim)
+                .doOnError(error -> log.error("Error during async feedback generation", error));
+    }
+
+    /**
+     * Асинхронный вызов AI провайдера с использованием WebClient.
+     * Реализует retry логику для retriable errors (429, 502, 503, 504).
+     */
+    private Mono<String> callAIProviderAsync(String systemPrompt, String userMessage) {
+        String apiUrl;
+        String apiKey;
+        String model;
+
+        if ("agentrouter".equalsIgnoreCase(provider)) {
+            apiUrl = AGENTROUTER_API_URL;
+            apiKey = agentRouterApiKey;
+            model = agentRouterModel;
+            log.debug("Using AgentRouter provider for async call");
+        } else {
+            apiUrl = OPENROUTER_API_URL;
+            apiKey = openRouterApiKey;
+            model = openRouterModel;
+            log.debug("Using OpenRouter provider for async call");
+        }
+
+        String requestBody = buildRequestBody(systemPrompt, userMessage, model);
+
+        return webClient.post()
+                .uri(apiUrl)
+                .header("Authorization", "Bearer " + apiKey)
+                .header("Content-Type", "application/json")
+                .bodyValue(requestBody)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, response -> {
+                    int statusCode = response.getStatusCode().value();
+
+                    // Определяем, является ли ошибка retriable
+                    if (statusCode == 429 || statusCode == 502 || statusCode == 503 || statusCode == 504) {
+                        log.warn("Retriable error from {} API: {}, will retry", provider, statusCode);
+                        return Mono.error(new RetriableAIException("Retriable error: " + statusCode));
+                    }
+
+                    // Non-retriable ошибки
+                    log.error("{} API error: {} {}", provider, statusCode, response.getStatusText());
+                    return Mono.error(new AIGatewayException(provider + " API error: " + statusCode, "AI_SERVICE_ERROR"));
+                })
+                .bodyToMono(String.class)
+                .timeout(Duration.ofSeconds(30))
+                .retryWhen(Retry.backoff(maxRetries, Duration.ofMillis(100))
+                        .filter(throwable -> throwable instanceof RetriableAIException)
+                        .doBeforeRetry(signal -> {
+                            int attempt = (int) signal.totalRetries() + 1;
+                            log.info("Retrying async call to {} API, attempt {}", provider, attempt);
+                        }))
+                .map(this::extractMessageContent)
+                .onErrorMap(throwable -> {
+                    if (throwable instanceof AIGatewayException) {
+                        return throwable;
+                    }
+                    return new AIGatewayException("Async call to " + provider + " failed: " + throwable.getMessage(), "AI_SERVICE_ERROR", throwable);
+                });
+    }
+
+    /**
+     * Internal exception for retriable errors in async processing.
+     */
+    private static class RetriableAIException extends RuntimeException {
+        RetriableAIException(String message) {
+            super(message);
         }
     }
 
