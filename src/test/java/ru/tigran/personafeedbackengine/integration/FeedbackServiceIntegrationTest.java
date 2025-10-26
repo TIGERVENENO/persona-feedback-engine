@@ -59,8 +59,10 @@ public class FeedbackServiceIntegrationTest {
     public void setUp() {
         // Create test user
         testUser = new User();
-        testUser.setUsername("testuser");
         testUser.setEmail("testuser@example.com");
+        testUser.setPasswordHash("$2a$10$abcdefghijklmnopqrstuvwxyz");  // BCrypt hashed password
+        testUser.setIsActive(true);
+        testUser.setDeleted(false);
         testUser = userRepository.save(testUser);
 
         // Create test products
@@ -182,8 +184,10 @@ public class FeedbackServiceIntegrationTest {
     public void testStartFeedbackSessionFailsWithUnownedProduct() {
         // Arrange - create another user and their product
         User otherUser = new User();
-        otherUser.setUsername("otheruser");
         otherUser.setEmail("otheruser@example.com");
+        otherUser.setPasswordHash("$2a$10$abcdefghijklmnopqrstuvwxyz");  // BCrypt hashed password
+        otherUser.setIsActive(true);
+        otherUser.setDeleted(false);
         otherUser = userRepository.save(otherUser);
 
         Product otherProduct = new Product();
@@ -206,8 +210,10 @@ public class FeedbackServiceIntegrationTest {
     public void testStartFeedbackSessionFailsWithUnownedPersona() {
         // Arrange - create another user and their persona
         User otherUser = new User();
-        otherUser.setUsername("otheruser");
         otherUser.setEmail("otheruser@example.com");
+        otherUser.setPasswordHash("$2a$10$abcdefghijklmnopqrstuvwxyz");  // BCrypt hashed password
+        otherUser.setIsActive(true);
+        otherUser.setDeleted(false);
         otherUser = userRepository.save(otherUser);
 
         Persona otherPersona = new Persona();
