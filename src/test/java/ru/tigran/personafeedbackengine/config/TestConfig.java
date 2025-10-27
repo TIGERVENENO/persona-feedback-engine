@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import ru.tigran.personafeedbackengine.security.JwtTokenProvider;
 
 /**
  * Тестовая конфигурация для мокирования Redis-зависимостей и Resilience4j
@@ -78,5 +79,16 @@ public class TestConfig {
     @Primary
     public TimeLimiterRegistry timeLimiterRegistry() {
         return Mockito.mock(TimeLimiterRegistry.class);
+    }
+
+    /**
+     * Мокирует JwtTokenProvider для тестирования
+     * Требуется для инициализации JwtAuthenticationFilter в контексте @WebMvcTest
+     * @return Mock JwtTokenProvider
+     */
+    @Bean
+    @Primary
+    public JwtTokenProvider jwtTokenProvider() {
+        return Mockito.mock(JwtTokenProvider.class);
     }
 }

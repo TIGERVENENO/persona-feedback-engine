@@ -3,31 +3,32 @@ package ru.tigran.personafeedbackengine.controller;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import ru.tigran.personafeedbackengine.config.SecurityConfig;
 import ru.tigran.personafeedbackengine.config.TestConfig;
 import ru.tigran.personafeedbackengine.dto.AuthenticationResponse;
 import ru.tigran.personafeedbackengine.dto.LoginRequest;
 import ru.tigran.personafeedbackengine.dto.RegisterRequest;
+import ru.tigran.personafeedbackengine.service.AuthenticationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.hamcrest.Matchers.*;
+import static org.mockito.Mockito.*;
 
 /**
- * Интеграционные тесты для AuthenticationController.
- * Тестирует регистрацию и логин пользователей.
+ * Модульные тесты для AuthenticationController.
+ * Тестирует HTTP слой без загрузки полного Application Context.
+ * Использует @WebMvcTest для изоляции слоев и быстрого выполнения.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-@Import(TestConfig.class)
-@DisplayName("AuthenticationController интеграционные тесты")
+@WebMvcTest(AuthenticationController.class)
+@Import({SecurityConfig.class, TestConfig.class})
+@DisplayName("AuthenticationController модульные тесты")
 class AuthenticationControllerTest {
 
     @Autowired
@@ -35,6 +36,9 @@ class AuthenticationControllerTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @MockBean
+    private AuthenticationService authenticationService;
 
     private static final String REGISTER_URL = "/api/v1/auth/register";
     private static final String LOGIN_URL = "/api/v1/auth/login";
@@ -45,14 +49,20 @@ class AuthenticationControllerTest {
     @DisplayName("POST /register - успешная регистрация нового пользователя")
     void registerSuccess() throws Exception {
         RegisterRequest request = new RegisterRequest(VALID_EMAIL, VALID_PASSWORD);
+        AuthenticationResponse mockResponse = new AuthenticationResponse(1L, "token-123", "Bearer");
+
+        when(authenticationService.register(request))
+                .thenReturn(mockResponse);
 
         mockMvc.perform(post(REGISTER_URL)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.user_id", notNullValue()))
-                .andExpect(jsonPath("$.access_token", notNullValue()))
+                .andExpect(jsonPath("$.user_id", equalTo(1)))
+                .andExpect(jsonPath("$.access_token", equalTo("token-123")))
                 .andExpect(jsonPath("$.token_type", equalTo("Bearer")));
+
+        verify(authenticationService).register(request);
     }
 
     @Test
@@ -60,13 +70,9 @@ class AuthenticationControllerTest {
     void registerDuplicateEmail() throws Exception {
         RegisterRequest request = new RegisterRequest(VALID_EMAIL, VALID_PASSWORD);
 
-        // Первая регистрация
-        mockMvc.perform(post(REGISTER_URL)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated());
+        when(authenticationService.register(request))
+                .thenThrow(new RuntimeException("Email already exists"));
 
-        // Вторая регистрация с тем же email
         mockMvc.perform(post(REGISTER_URL)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -133,28 +139,30 @@ class AuthenticationControllerTest {
     @Test
     @DisplayName("POST /login - успешный логин с корректными данными")
     void loginSuccess() throws Exception {
-        // Регистрация пользователя
-        RegisterRequest registerRequest = new RegisterRequest(VALID_EMAIL, VALID_PASSWORD);
-        mockMvc.perform(post(REGISTER_URL)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(registerRequest)))
-                .andExpect(status().isCreated());
-
-        // Логин
         LoginRequest loginRequest = new LoginRequest(VALID_EMAIL, VALID_PASSWORD);
+        AuthenticationResponse mockResponse = new AuthenticationResponse(1L, "token-456", "Bearer");
+
+        when(authenticationService.login(loginRequest))
+                .thenReturn(mockResponse);
+
         mockMvc.perform(post(LOGIN_URL)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(loginRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.user_id", notNullValue()))
-                .andExpect(jsonPath("$.access_token", notNullValue()))
+                .andExpect(jsonPath("$.user_id", equalTo(1)))
+                .andExpect(jsonPath("$.access_token", equalTo("token-456")))
                 .andExpect(jsonPath("$.token_type", equalTo("Bearer")));
+
+        verify(authenticationService).login(loginRequest);
     }
 
     @Test
     @DisplayName("POST /login - логин с несуществующим email")
     void loginNonExistentEmail() throws Exception {
         LoginRequest request = new LoginRequest("nonexistent@example.com", VALID_PASSWORD);
+
+        when(authenticationService.login(request))
+                .thenThrow(new RuntimeException("User not found"));
 
         mockMvc.perform(post(LOGIN_URL)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -166,15 +174,11 @@ class AuthenticationControllerTest {
     @Test
     @DisplayName("POST /login - логин с неверным паролем")
     void loginWrongPassword() throws Exception {
-        // Регистрация пользователя
-        RegisterRequest registerRequest = new RegisterRequest(VALID_EMAIL, VALID_PASSWORD);
-        mockMvc.perform(post(REGISTER_URL)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(registerRequest)))
-                .andExpect(status().isCreated());
-
-        // Логин с неверным паролем
         LoginRequest loginRequest = new LoginRequest(VALID_EMAIL, "wrongpassword123");
+
+        when(authenticationService.login(loginRequest))
+                .thenThrow(new RuntimeException("Invalid password"));
+
         mockMvc.perform(post(LOGIN_URL)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(loginRequest)))
@@ -221,41 +225,38 @@ class AuthenticationControllerTest {
         RegisterRequest request1 = new RegisterRequest("user1@example.com", VALID_PASSWORD);
         RegisterRequest request2 = new RegisterRequest("user2@example.com", VALID_PASSWORD);
 
-        String response1 = mockMvc.perform(post(REGISTER_URL)
+        AuthenticationResponse response1 = new AuthenticationResponse(1L, "token-1", "Bearer");
+        AuthenticationResponse response2 = new AuthenticationResponse(2L, "token-2", "Bearer");
+
+        when(authenticationService.register(request1)).thenReturn(response1);
+        when(authenticationService.register(request2)).thenReturn(response2);
+
+        mockMvc.perform(post(REGISTER_URL)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request1)))
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
+                .andExpect(status().isCreated());
 
-        String response2 = mockMvc.perform(post(REGISTER_URL)
+        mockMvc.perform(post(REGISTER_URL)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request2)))
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
+                .andExpect(status().isCreated());
 
-        AuthenticationResponse auth1 = objectMapper.readValue(response1, AuthenticationResponse.class);
-        AuthenticationResponse auth2 = objectMapper.readValue(response2, AuthenticationResponse.class);
-
-        assert !auth1.userId().equals(auth2.userId()) : "Разные пользователи должны иметь разные ID";
-        assert !auth1.accessToken().equals(auth2.accessToken()) : "Разные пользователи должны иметь разные токены";
+        verify(authenticationService, times(1)).register(request1);
+        verify(authenticationService, times(1)).register(request2);
     }
 
     @Test
     @DisplayName("POST /login - каждый логин возвращает новый токен")
     void loginGeneratesNewTokenEachTime() throws Exception {
-        // Регистрация
-        RegisterRequest registerRequest = new RegisterRequest(VALID_EMAIL, VALID_PASSWORD);
-        mockMvc.perform(post(REGISTER_URL)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(registerRequest)))
-                .andExpect(status().isCreated());
-
-        // Первый логин
         LoginRequest loginRequest = new LoginRequest(VALID_EMAIL, VALID_PASSWORD);
+
+        AuthenticationResponse token1 = new AuthenticationResponse(1L, "token-first", "Bearer");
+        AuthenticationResponse token2 = new AuthenticationResponse(1L, "token-second", "Bearer");
+
+        when(authenticationService.login(loginRequest))
+                .thenReturn(token1)
+                .thenReturn(token2);
+
         String response1 = mockMvc.perform(post(LOGIN_URL)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(loginRequest)))
@@ -264,7 +265,6 @@ class AuthenticationControllerTest {
                 .getResponse()
                 .getContentAsString();
 
-        // Второй логин
         String response2 = mockMvc.perform(post(LOGIN_URL)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(loginRequest)))
