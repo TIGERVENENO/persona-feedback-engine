@@ -10,8 +10,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
  * Тестовая конфигурация для мокирования Redis-зависимостей и Resilience4j
@@ -50,15 +48,6 @@ public class TestConfig {
     @Primary
     public RedissonClient redissonClient() {
         return Mockito.mock(RedissonClient.class);
-    }
-
-    /**
-     * Provide PasswordEncoder bean (normally from SecurityConfig)
-     * @return BCryptPasswordEncoder bean
-     */
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 
     /**
