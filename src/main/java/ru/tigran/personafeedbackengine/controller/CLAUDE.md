@@ -2,8 +2,54 @@
 
 ## Purpose
 REST API endpoints for client interaction with JWT-based authentication.
+Includes public API information endpoint and HTML page showing all available endpoints.
 
 ## Key Classes
+
+### ApiInfoController
+Provides information about all API endpoints in a structured JSON format and serves HTML page.
+
+- Base path: `/api`
+- Public endpoints (no JWT required)
+
+**Methods:**
+- **GET /api/endpoints**: Get structured information about all API endpoints
+  - Response: `ApiEndpointsResponse` with title, description, version, and grouped endpoints
+  - HTTP Status: 200 OK
+  - **Usage**: Programmatically get list of all available endpoints with metadata
+  - **Response example:**
+    ```json
+    {
+      "title": "Persona Feedback Engine API",
+      "description": "Асинхронный сервис для генерации AI персон...",
+      "version": "1.0.0",
+      "groups": [
+        {
+          "name": "Аутентификация",
+          "description": "Регистрация и вход пользователей",
+          "endpoints": [
+            {
+              "method": "POST",
+              "path": "/api/v1/auth/register",
+              "description": "Регистрация нового пользователя",
+              "requiresAuth": false
+            }
+          ]
+        }
+      ]
+    }
+    ```
+
+- **GET / (static/index.html)**: Render HTML page showing all API endpoints
+  - Response: Interactive HTML page with styled endpoint cards
+  - HTTP Status: 200 OK
+  - **Features:**
+    - Loads endpoint data from `/api/endpoints`
+    - Groups endpoints by category
+    - Shows HTTP method (GET/POST) with color coding
+    - Indicates which endpoints require JWT authentication
+    - Links to Swagger UI, OpenAPI JSON, and Health Check
+  - **Access**: Open `http://localhost:8080/` in browser
 
 ### AuthenticationController
 REST API for user registration and login with JWT token generation.
