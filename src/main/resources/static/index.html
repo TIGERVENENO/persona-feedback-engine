@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Persona Feedback Engine API</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 50px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 15px;
+        }
+
+        .version {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .endpoints-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .endpoint-group {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .endpoint-group:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .group-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-bottom: 3px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .group-header h2 {
+            font-size: 1.3rem;
+            margin-bottom: 5px;
+        }
+
+        .group-header p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .endpoints-list {
+            padding: 20px;
+        }
+
+        .endpoint {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .endpoint:hover {
+            background: #e9ecef;
+            border-left-color: #764ba2;
+        }
+
+        .endpoint:last-child {
+            margin-bottom: 0;
+        }
+
+        .endpoint-method {
+            display: inline-block;
+            font-weight: 700;
+            font-size: 0.85rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+
+        .method-post {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .method-get {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .endpoint-path {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: #333;
+            margin-bottom: 5px;
+            word-break: break-all;
+        }
+
+        .endpoint-description {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .auth-badge {
+            display: inline-block;
+            font-size: 0.75rem;
+            background: #fff3cd;
+            color: #856404;
+            padding: 3px 6px;
+            border-radius: 3px;
+            margin-top: 5px;
+        }
+
+        .quick-links {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+
+        .quick-links h3 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 1.2rem;
+        }
+
+        .links-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .link-btn {
+            display: inline-block;
+            padding: 12px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .link-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .link-btn.secondary {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .link-btn.secondary:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8rem;
+            }
+
+            .endpoints-container {
+                grid-template-columns: 1fr;
+            }
+
+            .links-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .footer {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 50px;
+            font-size: 0.9rem;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.1rem;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Persona Feedback Engine API</h1>
+            <p>Асинхронный сервис для генерации AI персон и сбора фидбека на продукты</p>
+            <span class="version" id="version">v1.0.0</span>
+        </div>
+
+        <div id="content">
+            <div class="loading">
+                Загрузка информации об эндпоинтах...
+            </div>
+        </div>
+
+        <div class="quick-links">
+            <h3>Быстрые ссылки</h3>
+            <div class="links-grid">
+                <a href="/swagger-ui.html" class="link-btn">📚 Swagger UI</a>
+                <a href="/v3/api-docs" class="link-btn secondary">📋 OpenAPI JSON</a>
+                <a href="/actuator/health" class="link-btn secondary">❤️ Health Check</a>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>© 2025 Persona Feedback Engine. Все права защищены.</p>
+        </div>
+    </div>
+
+    <script>
+        async function loadEndpoints() {
+            try {
+                const response = await fetch('/api/endpoints');
+                if (!response.ok) {
+                    throw new Error('Failed to load endpoints');
+                }
+                const data = await response.json();
+                renderEndpoints(data);
+            } catch (error) {
+                document.getElementById('content').innerHTML = `
+                    <div class="error">
+                        <strong>Ошибка:</strong> Не удалось загрузить информацию об эндпоинтах. ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        function renderEndpoints(data) {
+            // Update version
+            document.getElementById('version').textContent = `v${data.version}`;
+
+            // Create endpoints HTML
+            let html = '<div class="endpoints-container">';
+
+            for (const group of data.groups) {
+                html += `
+                    <div class="endpoint-group">
+                        <div class="group-header">
+                            <h2>${group.name}</h2>
+                            <p>${group.description}</p>
+                        </div>
+                        <div class="endpoints-list">
+                `;
+
+                for (const endpoint of group.endpoints) {
+                    const methodClass = endpoint.method === 'GET' ? 'method-get' : 'method-post';
+                    const authBadge = endpoint.requiresAuth ? '<span class="auth-badge">🔒 Требует JWT</span>' : '';
+
+                    html += `
+                        <div class="endpoint">
+                            <div class="endpoint-method ${methodClass}">${endpoint.method}</div>
+                            <div class="endpoint-path">${endpoint.path}</div>
+                            <div class="endpoint-description">${endpoint.description}</div>
+                            ${authBadge}
+                        </div>
+                    `;
+                }
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += '</div>';
+            document.getElementById('content').innerHTML = html;
+        }
+
+        // Load endpoints when page is ready
+        document.addEventListener('DOMContentLoaded', loadEndpoints);
+    </script>
+</body>
+</html>
