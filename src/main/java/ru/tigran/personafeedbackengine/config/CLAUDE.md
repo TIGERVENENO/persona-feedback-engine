@@ -17,6 +17,10 @@ Includes startup validators to ensure critical configuration is present.
   - **Exchanges:**
     - `persona-feedback-exchange` - Main exchange for task distribution
     - `persona-feedback-dlx` - Dead Letter Exchange for failed messages
+- **Message serialization:** Uses Jackson2JsonMessageConverter for JSON-based serialization
+  - Более безопасно чем Java сериализация
+  - Не требует whitelist для классов
+  - Совместимо с разными версиями приложения
 - Automatic routing: Failed/rejected messages are routed to DLQ for later analysis
 - Enables message routing, deduplication, and failure tracking
 
