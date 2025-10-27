@@ -8,6 +8,10 @@ Data transfer objects for API layer and message queue communication.
 ### PersonaGenerationRequest
 - `prompt: String` - User-provided prompt for persona generation (max 2000 chars)
 
+### ProductRequest
+- `name: String` - Product name (required, 1-200 chars)
+- `description: String` - Product description (optional, max 5000 chars)
+
 ### FeedbackSessionRequest
 - `productIds: List<Long>` - Products to get feedback on (max 5)
 - `personaIds: List<Long>` - Personas to generate feedback from (max 5)

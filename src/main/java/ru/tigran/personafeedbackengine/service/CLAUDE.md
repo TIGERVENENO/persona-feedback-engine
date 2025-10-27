@@ -73,6 +73,17 @@ User registration and login service with JWT token generation and BCrypt passwor
 - `startPersonaGeneration(PersonaGenerationRequest request)`: Creates Persona entity (state: GENERATING) and publishes PersonaGenerationTask to queue
 - Validates request ownership and constraints
 
+### ProductService
+- CRUD operations for products with user ownership validation
+- **Methods:**
+  - `createProduct(Long userId, ProductRequest request) → ProductResponse`: Creates new product for user
+  - `getProduct(Long userId, Long productId) → ProductResponse`: Gets product by ID with ownership check
+  - `getAllProducts(Long userId) → List<ProductResponse>`: Gets all non-deleted products for user
+  - `updateProduct(Long userId, Long productId, ProductRequest request) → ProductResponse`: Updates existing product
+  - `deleteProduct(Long userId, Long productId)`: Soft deletes product (sets deleted=true)
+- All operations validate user ownership before executing
+- Throws ValidationException if product not found or access denied
+
 ### FeedbackService
 - Entry point for feedback session workflow
 - `startFeedbackSession(FeedbackSessionRequest request)`: Creates FeedbackSession + FeedbackResult entities and publishes FeedbackGenerationTasks

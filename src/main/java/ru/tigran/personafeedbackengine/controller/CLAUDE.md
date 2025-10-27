@@ -58,6 +58,48 @@ Triggers persona generation workflow with user isolation via JWT.
   }
   ```
 
+### ProductController
+REST API для CRUD операций с продуктами.
+
+- Base path: `/api/v1/products`
+- **Requires JWT authentication** (Authorization: Bearer <token>)
+
+**Methods:**
+- **POST /api/v1/products**: Создать новый продукт
+  - Request: `ProductRequest` (name, description)
+  - Response: `ProductResponse` (id, name, description)
+  - HTTP Status: 201 Created
+  - User ID extracted from JWT token in SecurityContext
+  - Validates name (required, 1-200 chars), description (optional, max 5000 chars)
+  - **Usage**: Create product for feedback collection
+
+- **GET /api/v1/products**: Получить все продукты пользователя
+  - Response: `List<ProductResponse>`
+  - HTTP Status: 200 OK
+  - Returns only non-deleted products owned by current user
+  - **Usage**: List all user's products
+
+- **GET /api/v1/products/{productId}**: Получить продукт по ID
+  - Path parameter: productId
+  - Response: `ProductResponse`
+  - HTTP Status: 200 OK
+  - Validates ownership and not deleted
+  - **Usage**: Get specific product details
+
+- **PUT /api/v1/products/{productId}**: Обновить продукт
+  - Path parameter: productId
+  - Request: `ProductRequest` (name, description)
+  - Response: `ProductResponse`
+  - HTTP Status: 200 OK
+  - Validates ownership and not deleted
+  - **Usage**: Update existing product
+
+- **DELETE /api/v1/products/{productId}**: Удалить продукт (soft delete)
+  - Path parameter: productId
+  - HTTP Status: 204 No Content
+  - Marks product as deleted (preserves feedback history)
+  - **Usage**: Remove product from active list
+
 ### FeedbackController
 Manages feedback session workflows with user isolation via JWT.
 
