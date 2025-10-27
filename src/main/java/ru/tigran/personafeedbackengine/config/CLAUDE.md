@@ -26,6 +26,13 @@ Includes startup validators to ensure critical configuration is present.
 - TTL: 24 hours (86400 seconds)
 - Caching strategy: By generation prompt for persona reusability
 
+### OpenApiConfig
+- Configures OpenAPI 3.0 documentation for Swagger UI
+- Defines JWT Bearer token security scheme (optional usage)
+- **Все эндпоинты видны в Swagger UI без авторизации**
+- Security scheme доступен опционально для тестирования защищенных эндпоинтов
+- Описание API: заголовок, версия, контактная информация
+
 ### RestClientConfig
 - Configures HTTP timeout: 30 seconds
 - Used by AIGatewayService for AI provider API calls (OpenRouter, AgentRouter)

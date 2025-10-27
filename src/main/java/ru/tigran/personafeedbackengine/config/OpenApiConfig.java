@@ -35,11 +35,12 @@ public class OpenApiConfig {
                                                 "Скопируй значение 'accessToken' из ответа и вставь сюда.")
                         )
                 )
-                .addSecurityItem(new SecurityRequirement().addList("bearer-jwt"))
+                // Убрано глобальное требование JWT - теперь все эндпоинты видны в Swagger UI без авторизации
+                // Security scheme доступен опционально для тестирования защищенных эндпоинтов
                 .info(new Info()
                         .title("Persona Feedback Engine API")
                         .description("REST API для генерации AI персон и сбора фидбека на продукты. " +
-                                "Все эндпоинты (кроме /auth/*) требуют JWT аутентификацию.")
+                                "Эндпоинты /auth/* публичные, остальные защищены JWT но доступны для просмотра в Swagger.")
                         .version("1.0.0")
                         .contact(new Contact()
                                 .name("Tigran")
