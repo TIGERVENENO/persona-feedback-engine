@@ -44,7 +44,7 @@ public class ProductService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ValidationException(
                         "User not found",
-                        ErrorCode.ENTITY_NOT_FOUND.getCode()
+                        ErrorCode.USER_NOT_FOUND.getCode()
                 ));
 
         Product product = new Product();
@@ -73,13 +73,13 @@ public class ProductService {
         Product product = productRepository.findByUserIdAndId(userId, productId)
                 .orElseThrow(() -> new ValidationException(
                         "Product not found or access denied",
-                        ErrorCode.ENTITY_NOT_FOUND.getCode()
+                        ErrorCode.PRODUCT_NOT_FOUND.getCode()
                 ));
 
         if (Boolean.TRUE.equals(product.getDeleted())) {
             throw new ValidationException(
                     "Product has been deleted",
-                    ErrorCode.ENTITY_NOT_FOUND.getCode()
+                    ErrorCode.PRODUCT_NOT_FOUND.getCode()
             );
         }
 
@@ -118,7 +118,7 @@ public class ProductService {
         Product product = productRepository.findByUserIdAndId(userId, productId)
                 .orElseThrow(() -> new ValidationException(
                         "Product not found or access denied",
-                        ErrorCode.ENTITY_NOT_FOUND.getCode()
+                        ErrorCode.PRODUCT_NOT_FOUND.getCode()
                 ));
 
         if (Boolean.TRUE.equals(product.getDeleted())) {
@@ -151,7 +151,7 @@ public class ProductService {
         Product product = productRepository.findByUserIdAndId(userId, productId)
                 .orElseThrow(() -> new ValidationException(
                         "Product not found or access denied",
-                        ErrorCode.ENTITY_NOT_FOUND.getCode()
+                        ErrorCode.PRODUCT_NOT_FOUND.getCode()
                 ));
 
         product.setDeleted(true);
