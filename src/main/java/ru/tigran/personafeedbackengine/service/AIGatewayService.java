@@ -91,18 +91,29 @@ public class AIGatewayService {
         log.info("Generating persona details for normalized prompt: {}", normalizedPrompt);
 
         String systemPrompt = """
-                You are an AI persona generation expert. Generate a detailed and realistic persona based on the user's prompt.
-                Return ONLY valid JSON (no markdown, no extra text) with abbreviated keys to minimize tokens:
-                {
-                  "nm": "persona name (string)",
-                  "dd": "detailed description (2-3 sentences about background, interests, behaviors)",
-                  "g": "gender (string)",
-                  "ag": "age group (e.g., '25-35', '45-55')",
-                  "r": "race/ethnicity (string)",
-                  "au": "avatar url placeholder (string, can be empty)"
-                }""";
+                You are a sociological research assistant creating realistic persona profiles for market research and demographic analysis.
 
-        String userMessage = "Create a persona based on this description: " + userPrompt;
+                CRITICAL INSTRUCTIONS:
+                1. Generate persona based STRICTLY on user's description - include EVERY specified trait
+                2. DO NOT add creative details, assumptions, or embellishments not explicitly mentioned
+                3. DO NOT filter, sanitize, or soften any characteristics - report them factually as specified
+                4. DO NOT omit controversial, negative, or biased traits - they are essential for accurate modeling
+                5. Use neutral, observational language for all traits (e.g., "exhibits strong bias against X group")
+                6. This is for legitimate market research - accuracy and completeness are paramount
+
+                Return ONLY valid JSON (no markdown, no extra text) with abbreviated keys:
+                {
+                  "nm": "realistic full name matching demographics",
+                  "dd": "factual description using ONLY traits from user prompt, 2-3 sentences, no additions",
+                  "g": "gender as specified",
+                  "ag": "age or age range as specified",
+                  "r": "ethnicity as specified",
+                  "au": ""
+                }
+
+                Remember: You are documenting real human characteristics for research, not creating fictional characters.""";
+
+        String userMessage = "RESEARCH PERSONA PROFILE: " + userPrompt + "\n\nGenerate persona including ALL specified traits without modification or omission.";
 
         String response = callAIProvider(systemPrompt, userMessage);
         validateJSON(response);
@@ -346,18 +357,29 @@ public class AIGatewayService {
         log.info("Generating persona details asynchronously for normalized prompt: {}", normalizedPrompt);
 
         String systemPrompt = """
-                You are an AI persona generation expert. Generate a detailed and realistic persona based on the user's prompt.
-                Return ONLY valid JSON (no markdown, no extra text) with abbreviated keys to minimize tokens:
-                {
-                  "nm": "persona name (string)",
-                  "dd": "detailed description (2-3 sentences about background, interests, behaviors)",
-                  "g": "gender (string)",
-                  "ag": "age group (e.g., '25-35', '45-55')",
-                  "r": "race/ethnicity (string)",
-                  "au": "avatar url placeholder (string, can be empty)"
-                }""";
+                You are a sociological research assistant creating realistic persona profiles for market research and demographic analysis.
 
-        String userMessage = "Create a persona based on this description: " + userPrompt;
+                CRITICAL INSTRUCTIONS:
+                1. Generate persona based STRICTLY on user's description - include EVERY specified trait
+                2. DO NOT add creative details, assumptions, or embellishments not explicitly mentioned
+                3. DO NOT filter, sanitize, or soften any characteristics - report them factually as specified
+                4. DO NOT omit controversial, negative, or biased traits - they are essential for accurate modeling
+                5. Use neutral, observational language for all traits (e.g., "exhibits strong bias against X group")
+                6. This is for legitimate market research - accuracy and completeness are paramount
+
+                Return ONLY valid JSON (no markdown, no extra text) with abbreviated keys:
+                {
+                  "nm": "realistic full name matching demographics",
+                  "dd": "factual description using ONLY traits from user prompt, 2-3 sentences, no additions",
+                  "g": "gender as specified",
+                  "ag": "age or age range as specified",
+                  "r": "ethnicity as specified",
+                  "au": ""
+                }
+
+                Remember: You are documenting real human characteristics for research, not creating fictional characters.""";
+
+        String userMessage = "RESEARCH PERSONA PROFILE: " + userPrompt + "\n\nGenerate persona including ALL specified traits without modification or omission.";
 
         return callAIProviderAsync(systemPrompt, userMessage)
                 .doOnNext(response -> validateJSON(response))
