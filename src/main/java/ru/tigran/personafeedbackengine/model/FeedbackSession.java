@@ -31,6 +31,9 @@ public class FeedbackSession extends AuditableEntity {
     @Column(nullable = false)
     private FeedbackSessionStatus status;
 
+    @Column(nullable = false, length = 2)
+    private String language;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

@@ -15,6 +15,7 @@ Data transfer objects for API layer and message queue communication.
 ### FeedbackSessionRequest
 - `productIds: List<Long>` - Products to get feedback on (max 5)
 - `personaIds: List<Long>` - Personas to generate feedback from (max 5)
+- `language: String` - ISO 639-1 language code (EN, RU, FR, etc.) - required, validated against ISO standard
 
 ## API Response DTOs
 
@@ -41,6 +42,7 @@ Data transfer objects for API layer and message queue communication.
 ### FeedbackSessionResponse
 - `id: Long`
 - `status: String`
+- `language: String` - ISO 639-1 language code used for feedback generation
 - `createdAt: LocalDateTime`
 - `feedbackResults: List<FeedbackResultDTO>`
 - `pageNumber: Integer` (nullable) - 0-based page number when paginated, null if all results
@@ -73,3 +75,4 @@ Data transfer objects for API layer and message queue communication.
 - `resultId: Long` - ID of FeedbackResult to update
 - `productId: Long` - Product being reviewed
 - `personaId: Long` - Persona providing feedback
+- `language: String` - ISO 639-1 language code for feedback generation

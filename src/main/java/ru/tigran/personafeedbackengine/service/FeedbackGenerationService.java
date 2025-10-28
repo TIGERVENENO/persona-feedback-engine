@@ -101,7 +101,8 @@ public class FeedbackGenerationService {
         // Generate feedback via AI
         String feedback = aiGatewayService.generateFeedbackForProduct(
                 persona.getDetailedDescription(),
-                product.getDescription()
+                product.getDescription(),
+                task.language()
         );
 
         // Update FeedbackResult

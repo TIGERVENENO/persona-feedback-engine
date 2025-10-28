@@ -55,11 +55,11 @@ User registration and login service with JWT token generation and BCrypt passwor
 
 **Synchronous Methods (blocking):**
 - `generatePersonaDetails(Long userId, String userPrompt)`: Cacheable, generates detailed persona profile (cached by userId + prompt)
-- `generateFeedbackForProduct(String personaDescription, String productDescription)`: Generates feedback text (not cached)
+- `generateFeedbackForProduct(String personaDescription, String productDescription, String languageCode)`: Generates feedback text in specified language (not cached). Language code is ISO 639-1 format (EN, RU, FR, etc.)
 
 **Asynchronous Methods (non-blocking, returns Mono):**
 - `generatePersonaDetailsAsync(Long userId, String userPrompt)`: Async persona generation with non-blocking retry logic
-- `generateFeedbackForProductAsync(String personaDescription, String productDescription)`: Async feedback generation
+- `generateFeedbackForProductAsync(String personaDescription, String productDescription, String languageCode)`: Async feedback generation in specified language
 
 **Async Implementation Details:**
 - Uses Spring WebFlux WebClient with Reactor Netty

@@ -35,6 +35,14 @@ JPA entities and domain models for the persona feedback engine.
 - Owned by a User
 - States: PENDING → IN_PROGRESS → COMPLETED or FAILED
 - Contains multiple FeedbackResult entities
+- Fields:
+  - `id: Long` - Primary key
+  - `status: FeedbackSessionStatus` - Current status (PENDING, IN_PROGRESS, COMPLETED, FAILED)
+  - `language: String` - ISO 639-1 language code for feedback generation (EN, RU, FR, etc.)
+  - `user: User` - Owner of the session
+  - `feedbackResults: List<FeedbackResult>` - Collection of feedback results
+  - `createdAt: LocalDateTime` - Audit timestamp (auto)
+  - `updatedAt: LocalDateTime` - Audit timestamp (auto)
 
 ### FeedbackResult
 - Individual feedback entry from one persona on one product

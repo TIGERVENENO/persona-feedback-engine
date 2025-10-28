@@ -114,14 +114,20 @@ public class AIGatewayService {
      * Not cacheable as feedback is user/session-specific and volatile.
      *
      * Expected response: plain text feedback (2-3 sentences)
+     *
+     * @param personaDescription Описание персоны
+     * @param productDescription Описание продукта
+     * @param languageCode Код языка ISO 639-1 (EN, RU, FR и т.д.)
+     * @return Текст фидбека на указанном языке
      */
-    public String generateFeedbackForProduct(String personaDescription, String productDescription) {
-        log.info("Generating feedback for product");
+    public String generateFeedbackForProduct(String personaDescription, String productDescription, String languageCode) {
+        log.info("Generating feedback for product in language: {}", languageCode);
 
-        String systemPrompt = """
+        String systemPrompt = String.format("""
                 You are a realistic product reviewer embodying a specific persona.
                 Generate authentic, constructive feedback from the perspective of the given persona.
-                Return ONLY the feedback text (no JSON, no labels, no extra formatting).""";
+                IMPORTANT: Respond in the language with ISO 639-1 code: %s
+                Return ONLY the feedback text (no JSON, no labels, no extra formatting).""", languageCode);
 
         String userMessage = String.format(
                 "Persona: %s\n\nProduct: %s\n\nProvide your honest feedback on this product:",
@@ -363,15 +369,17 @@ public class AIGatewayService {
      *
      * @param personaDescription Описание персоны
      * @param productDescription Описание продукта
+     * @param languageCode Код языка ISO 639-1 (EN, RU, FR и т.д.)
      * @return Mono с текстом обратной связи
      */
-    public Mono<String> generateFeedbackForProductAsync(String personaDescription, String productDescription) {
-        log.info("Generating feedback for product asynchronously");
+    public Mono<String> generateFeedbackForProductAsync(String personaDescription, String productDescription, String languageCode) {
+        log.info("Generating feedback for product asynchronously in language: {}", languageCode);
 
-        String systemPrompt = """
+        String systemPrompt = String.format("""
                 You are a realistic product reviewer embodying a specific persona.
                 Generate authentic, constructive feedback from the perspective of the given persona.
-                Return ONLY the feedback text (no JSON, no labels, no extra formatting).""";
+                IMPORTANT: Respond in the language with ISO 639-1 code: %s
+                Return ONLY the feedback text (no JSON, no labels, no extra formatting).""", languageCode);
 
         String userMessage = String.format(
                 "Persona: %s\n\nProduct: %s\n\nProvide your honest feedback on this product:",

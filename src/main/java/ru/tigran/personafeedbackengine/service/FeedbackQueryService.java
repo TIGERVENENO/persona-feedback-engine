@@ -67,6 +67,7 @@ public class FeedbackQueryService {
         return new FeedbackSessionResponse(
                 session.getId(),
                 session.getStatus().name(),
+                session.getLanguage(),
                 session.getCreatedAt(),
                 resultDTOs
         );
@@ -107,6 +108,7 @@ public class FeedbackQueryService {
         return new FeedbackSessionResponse(
                 session.getId(),
                 session.getStatus().name(),
+                session.getLanguage(),
                 session.getCreatedAt(),
                 resultDTOs,
                 page,

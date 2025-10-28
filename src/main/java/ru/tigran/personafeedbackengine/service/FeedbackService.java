@@ -124,6 +124,7 @@ public class FeedbackService {
         FeedbackSession session = new FeedbackSession();
         session.setUser(user);
         session.setStatus(FeedbackSession.FeedbackSessionStatus.PENDING);
+        session.setLanguage(request.language().toUpperCase());
         session.setFeedbackResults(new ArrayList<>());
 
         FeedbackSession savedSession = feedbackSessionRepository.save(session);
@@ -148,7 +149,8 @@ public class FeedbackService {
             FeedbackGenerationTask task = new FeedbackGenerationTask(
                     savedResult.getId(),
                     savedResult.getProduct().getId(),
-                    savedResult.getPersona().getId()
+                    savedResult.getPersona().getId(),
+                    savedSession.getLanguage()
             );
             rabbitTemplate.convertAndSend(
                     RabbitMQConfig.EXCHANGE_NAME,
