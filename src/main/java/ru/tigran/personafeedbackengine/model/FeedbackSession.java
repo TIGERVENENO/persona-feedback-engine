@@ -34,6 +34,10 @@ public class FeedbackSession extends AuditableEntity {
     @Column(nullable = false, length = 2)
     private String language;
 
+    // AI-aggregated insights: {averageScore, purchaseIntentPercent, keyThemes: [{theme, mentions}]}
+    @Column(columnDefinition = "JSONB")
+    private String aggregatedInsights;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

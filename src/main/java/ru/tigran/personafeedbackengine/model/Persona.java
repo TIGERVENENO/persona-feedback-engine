@@ -41,6 +41,22 @@ public class Persona extends AuditableEntity {
     @Column(columnDefinition = "TEXT")
     private String productAttitudes;
 
+    // Demographics fields for target audience matching and persona reuse
+    @Column(length = 10)
+    private String demographicGender;  // "male", "female", "other"
+
+    @Column
+    private Integer age;  // Exact age (e.g., 27, 34)
+
+    @Column(length = 50)
+    private String region;  // "moscow", "spb", "regions"
+
+    @Column(length = 20)
+    private String incomeLevel;  // "low", "medium", "high"
+
+    @Column(columnDefinition = "JSONB")
+    private String demographicsHash;  // JSON hash for uniqueness and caching
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PersonaStatus status;
