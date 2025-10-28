@@ -1,5 +1,6 @@
 package ru.tigran.personafeedbackengine.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -8,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.tigran.personafeedbackengine.dto.AggregatedInsights;
 import ru.tigran.personafeedbackengine.dto.FeedbackResultDTO;
 import ru.tigran.personafeedbackengine.dto.FeedbackSessionResponse;
 import ru.tigran.personafeedbackengine.exception.UnauthorizedException;
@@ -24,13 +26,16 @@ public class FeedbackQueryService {
 
     private final FeedbackSessionRepository feedbackSessionRepository;
     private final FeedbackResultRepository feedbackResultRepository;
+    private final ObjectMapper objectMapper;
 
     public FeedbackQueryService(
             FeedbackSessionRepository feedbackSessionRepository,
-            FeedbackResultRepository feedbackResultRepository
+            FeedbackResultRepository feedbackResultRepository,
+            ObjectMapper objectMapper
     ) {
         this.feedbackSessionRepository = feedbackSessionRepository;
         this.feedbackResultRepository = feedbackResultRepository;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -66,12 +71,16 @@ public class FeedbackQueryService {
                 ))
                 .toList();
 
+        // Парсим aggregatedInsights (null если сессия не завершена)
+        AggregatedInsights aggregatedInsights = parseAggregatedInsights(session.getAggregatedInsights());
+
         return new FeedbackSessionResponse(
                 session.getId(),
                 session.getStatus().name(),
                 session.getLanguage(),
                 session.getCreatedAt(),
-                resultDTOs
+                resultDTOs,
+                aggregatedInsights
         );
     }
 
@@ -109,16 +118,39 @@ public class FeedbackQueryService {
                 ))
                 .toList();
 
+        // Парсим aggregatedInsights (null если сессия не завершена)
+        AggregatedInsights aggregatedInsights = parseAggregatedInsights(session.getAggregatedInsights());
+
         return new FeedbackSessionResponse(
                 session.getId(),
                 session.getStatus().name(),
                 session.getLanguage(),
                 session.getCreatedAt(),
                 resultDTOs,
+                aggregatedInsights,
                 page,
                 size,
                 resultsPage.getTotalElements()
         );
+    }
+
+    /**
+     * Парсит aggregatedInsights из JSON строки в DTO.
+     *
+     * @param aggregatedInsightsJson JSON строка из FeedbackSession.aggregatedInsights (JSONB)
+     * @return AggregatedInsights DTO или null если JSON пустой/null
+     */
+    private AggregatedInsights parseAggregatedInsights(String aggregatedInsightsJson) {
+        if (aggregatedInsightsJson == null || aggregatedInsightsJson.isEmpty()) {
+            return null;
+        }
+
+        try {
+            return objectMapper.readValue(aggregatedInsightsJson, AggregatedInsights.class);
+        } catch (Exception e) {
+            log.error("Failed to parse aggregatedInsights JSON: {}", aggregatedInsightsJson, e);
+            return null;
+        }
     }
 
     /**
