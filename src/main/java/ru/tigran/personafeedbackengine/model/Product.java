@@ -7,7 +7,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
-import org.hibernate.annotations.Type;
 
 @Entity
 @Table(name = "products", indexes = {
@@ -37,7 +36,6 @@ public class Product extends AuditableEntity {
     private String category;
 
     @Column(name = "key_features", columnDefinition = "JSONB")
-    @Type(JsonbStringType.class)
     @Convert(converter = JsonbConverter.class)
     private java.util.List<String> keyFeatures;
 
