@@ -15,9 +15,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import ru.tigran.personafeedbackengine.dto.ProductRequest;
 import ru.tigran.personafeedbackengine.dto.ProductResponse;
+import ru.tigran.personafeedbackengine.exception.UnauthorizedException;
 import ru.tigran.personafeedbackengine.service.ProductService;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * REST API для управления продуктами.
@@ -34,6 +36,23 @@ public class ProductController {
 
     public ProductController(ProductService productService) {
         this.productService = productService;
+    }
+
+    /**
+     * Безопасно извлекает userId из SecurityContext.
+     * Выкидывает UnauthorizedException если токен отсутствует или невалиден.
+     *
+     * @return User ID из JWT токена
+     * @throws UnauthorizedException если аутентификация отсутствует
+     */
+    private Long extractAuthenticatedUserId() {
+        return Optional
+                .ofNullable(SecurityContextHolder.getContext().getAuthentication())
+                .map(auth -> (Long) auth.getPrincipal())
+                .orElseThrow(() -> new UnauthorizedException(
+                        "Missing or invalid JWT token in Authorization header",
+                        "MISSING_AUTHENTICATION"
+                ));
     }
 
     /**
@@ -66,7 +85,7 @@ public class ProductController {
     public ResponseEntity<ProductResponse> createProduct(
             @Valid @RequestBody ProductRequest request
     ) {
-        Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Long userId = extractAuthenticatedUserId();
         log.info("POST /api/v1/products - user: {}, product name: {}", userId, request.name());
 
         ProductResponse response = productService.createProduct(userId, request);
@@ -95,7 +114,7 @@ public class ProductController {
             )
     })
     public ResponseEntity<List<ProductResponse>> getAllProducts() {
-        Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Long userId = extractAuthenticatedUserId();
         log.info("GET /api/v1/products - user: {}", userId);
 
         List<ProductResponse> products = productService.getAllProducts(userId);
@@ -130,7 +149,7 @@ public class ProductController {
             )
     })
     public ResponseEntity<ProductResponse> getProduct(@PathVariable Long productId) {
-        Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Long userId = extractAuthenticatedUserId();
         log.info("GET /api/v1/products/{} - user: {}", productId, userId);
 
         ProductResponse response = productService.getProduct(userId, productId);
@@ -173,7 +192,7 @@ public class ProductController {
             @PathVariable Long productId,
             @Valid @RequestBody ProductRequest request
     ) {
-        Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Long userId = extractAuthenticatedUserId();
         log.info("PUT /api/v1/products/{} - user: {}, new name: {}", productId, userId, request.name());
 
         ProductResponse response = productService.updateProduct(userId, productId, request);
@@ -208,7 +227,7 @@ public class ProductController {
             )
     })
     public ResponseEntity<Void> deleteProduct(@PathVariable Long productId) {
-        Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Long userId = extractAuthenticatedUserId();
         log.info("DELETE /api/v1/products/{} - user: {}", productId, userId);
 
         productService.deleteProduct(userId, productId);
