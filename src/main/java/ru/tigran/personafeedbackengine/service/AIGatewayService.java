@@ -37,6 +37,8 @@ public class AIGatewayService {
 
     private static final String OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
     private static final String AGENTROUTER_API_URL = "https://api.agentrouter.ai/v1/chat/completions";
+    // Maximum backoff delay to prevent excessive thread blocking (8 seconds max per retry)
+    private static final long MAX_BACKOFF_MS = 8000;
 
     public AIGatewayService(
             RestClient restClient,
@@ -243,6 +245,21 @@ public class AIGatewayService {
     }
 
     /**
+     * Calculates backoff delay with exponential multiplier and maximum cap.
+     * Prevents DoS attacks by limiting the maximum blocking time per retry.
+     *
+     * @param baseDelayMs Base delay in milliseconds
+     * @param attemptNumber Current attempt number (1-based)
+     * @param multiplier Exponential backoff multiplier
+     * @return Calculated backoff delay capped at MAX_BACKOFF_MS
+     */
+    private long calculateBackoffDelay(long baseDelayMs, int attemptNumber, int multiplier) {
+        long backoffMs = baseDelayMs * (long) Math.pow(multiplier, attemptNumber - 1);
+        // Cap backoff to prevent excessive thread blocking
+        return Math.min(backoffMs, MAX_BACKOFF_MS);
+    }
+
+    /**
      * Validates language code against a whitelist to prevent injection via language parameter.
      * Supports ISO 639-1 two-letter language codes.
      */
@@ -338,6 +355,8 @@ public class AIGatewayService {
                 }
                 try {
                     long backoffMs = retryDelayMs * (long) Math.pow(retryBackoffMultiplier, attempt - 1);
+                    // Cap backoff to prevent excessive thread blocking (DoS mitigation)
+                    backoffMs = Math.min(backoffMs, MAX_BACKOFF_MS);
                     log.info("Retrying after {} ms (attempt {}/{})", backoffMs, attempt, maxRetries);
                     Thread.sleep(backoffMs);
                 } catch (InterruptedException ie) {
@@ -362,6 +381,8 @@ public class AIGatewayService {
                 }
                 try {
                     long backoffMs = retryDelayMs * (long) Math.pow(retryBackoffMultiplier, attempt - 1);
+                    // Cap backoff to prevent excessive thread blocking (DoS mitigation)
+                    backoffMs = Math.min(backoffMs, MAX_BACKOFF_MS);
                     log.info("Retrying after {} ms (attempt {}/{})", backoffMs, attempt, maxRetries);
                     Thread.sleep(backoffMs);
                 } catch (InterruptedException ie) {
