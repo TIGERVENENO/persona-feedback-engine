@@ -109,34 +109,3 @@ CREATE INDEX IF NOT EXISTS idx_feedback_results_persona_id ON feedback_results(p
 CREATE INDEX IF NOT EXISTS idx_feedback_results_status ON feedback_results(status);
 CREATE INDEX IF NOT EXISTS idx_feedback_results_session_status ON feedback_results(feedback_session_id, status);
 CREATE INDEX IF NOT EXISTS idx_feedback_results_session_product_persona ON feedback_results(feedback_session_id, product_id, persona_id);
-
--- ============================================================================
--- TEST DATA (для тестов)
--- ============================================================================
-
--- TEST USER
-INSERT INTO users (email, password_hash, is_active, deleted, created_at, updated_at)
-VALUES ('testuser@example.com', '$2a$10$abcdefghijklmnopqrstuvwxyz', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-
--- TEST PRODUCTS
-INSERT INTO products (name, description, user_id, deleted, created_at, updated_at)
-VALUES
-  ('Premium Coffee Maker', 'A state-of-the-art coffee maker with programmable brewing and built-in grinder', 1, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-  ('Noise-Canceling Headphones', 'Professional-grade wireless headphones with active noise cancellation', 1, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-
--- TEST PERSONA
-INSERT INTO personas (name, detailed_description, gender, age_group, race, avatar_url, status, generation_prompt, user_id, deleted, created_at, updated_at)
-VALUES (
-  'Sarah Miller',
-  'Sarah is a busy marketing manager in her early 30s who values convenience and quality in her daily tech purchases',
-  'Female',
-  '28-35',
-  'Caucasian',
-  'https://example.com/avatars/sarah.jpg',
-  'ACTIVE',
-  'A tech-savvy marketing manager in her early 30s who values convenience and quality',
-  1,
-  false,
-  CURRENT_TIMESTAMP,
-  CURRENT_TIMESTAMP
-);
