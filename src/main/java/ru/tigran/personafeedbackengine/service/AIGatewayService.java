@@ -67,59 +67,62 @@ public class AIGatewayService {
     }
 
     /**
-     * Generates detailed persona information from a user prompt.
-     * This method is cacheable by userId + prompt to isolate data between users
-     * while enabling persona reusability within the same user.
+     * Generates detailed persona information from structured demographic and psychographic data.
+     * This method is cacheable by userId + structured data JSON to isolate data between users.
+     *
+     * IMPORTANT: Response is ALWAYS in English for consistency in persona profiles.
      *
      * Expected response structure:
      * {
-     *   "nm": "persona name",
-     *   "dd": "detailed description",
-     *   "g": "gender",
-     *   "ag": "age group",
-     *   "r": "race",
-     *   "au": "avatar url"
+     *   "name": "Full Name",
+     *   "detailed_bio": "150-200 word bio including shopping habits, brand preferences, decision-making style",
+     *   "product_attitudes": "How they typically evaluate products in this category"
      * }
      *
-     * @param userId User ID for cache isolation (ensures data privacy)
-     * @param userPrompt Persona generation prompt
-     * @return JSON string with persona details
+     * @param userId User ID for cache isolation
+     * @param demographicsJson JSON string with demographics (age, gender, location, occupation, income)
+     * @param psychographicsJson JSON string with psychographics (values, lifestyle, painPoints)
+     * @return JSON string with persona details (always in English)
      */
-    @Cacheable(value = "personaCache", key = "T(ru.tigran.personafeedbackengine.util.CacheKeyUtils).generatePersonaCacheKey(#userId, #userPrompt)")
-    public String generatePersonaDetails(Long userId, String userPrompt) {
-        String normalizedPrompt = CacheKeyUtils.normalizePrompt(userPrompt);
-        log.info("Generating persona details for normalized prompt: {}", normalizedPrompt);
+    @Cacheable(value = "personaCache", key = "T(ru.tigran.personafeedbackengine.util.CacheKeyUtils).generatePersonaCacheKey(#userId, #demographicsJson + #psychographicsJson)")
+    public String generatePersonaDetails(Long userId, String demographicsJson, String psychographicsJson) {
+        log.info("Generating structured persona details for user {}", userId);
 
         String systemPrompt = """
-                You are a sociological research assistant creating realistic persona profiles for market research and demographic analysis.
+                You are a consumer research expert creating detailed persona profiles for market analysis.
 
                 CRITICAL INSTRUCTIONS:
-                1. Generate persona based STRICTLY on user's description - include EVERY specified trait
-                2. DO NOT add creative details, assumptions, or embellishments not explicitly mentioned
-                3. DO NOT filter, sanitize, or soften any characteristics - report them factually as specified
-                4. DO NOT omit controversial, negative, or biased traits - they are essential for accurate modeling
-                5. Use neutral, observational language for all traits (e.g., "exhibits strong bias against X group")
-                6. This is for legitimate market research - accuracy and completeness are paramount
+                1. Create a realistic consumer persona based STRICTLY on the provided demographic and psychographic data
+                2. Generate detailed bio (150-200 words) covering shopping habits, brand preferences, decision-making style
+                3. ALL OUTPUT MUST BE IN ENGLISH (regardless of input language)
+                4. Be specific and realistic - base persona on actual consumer behavior patterns
+                5. Include product evaluation approach in product_attitudes field
 
                 OUTPUT FORMAT (CRITICAL):
-                - Return ONLY raw JSON object - NO markdown, NO code blocks, NO backticks, NO extra text
-                - Start directly with { and end with }
-                - Do NOT wrap in ```json ``` or ``` ```
-                - Example of CORRECT format: {"nm":"John Doe","dd":"...","g":"Male","ag":"30-40","r":"Caucasian","au":""}
+                - Return ONLY raw JSON object - NO markdown, NO code blocks, NO backticks
+                - Start with { and end with }
+                - Do NOT wrap in ```json ```
+                - ALL text fields must be in ENGLISH
 
-                JSON structure with abbreviated keys:
+                JSON structure:
                 {
-                  "nm": "realistic full name matching demographics",
-                  "dd": "factual description using ONLY traits from user prompt, 2-3 sentences, no additions",
-                  "g": "gender as specified",
-                  "ag": "age or age range as specified",
-                  "r": "ethnicity as specified",
-                  "au": ""
+                  "name": "realistic full name matching demographics",
+                  "detailed_bio": "150-200 words about this person: background, lifestyle, shopping habits, brand preferences, decision-making style, typical purchase behavior",
+                  "product_attitudes": "how this person typically evaluates and decides on products in various categories"
                 }
 
-                Remember: You are documenting real human characteristics for research, not creating fictional characters.""";
+                Remember: Output MUST be in English. Focus on realistic consumer behavior.""";
 
-        String userMessage = "RESEARCH PERSONA PROFILE: " + userPrompt + "\n\nGenerate persona including ALL specified traits without modification or omission.";
+        String userMessage = String.format("""
+                Generate a detailed consumer persona based on the following characteristics:
+
+                DEMOGRAPHICS:
+                %s
+
+                PSYCHOGRAPHICS:
+                %s
+
+                Create a comprehensive persona profile in ENGLISH.""", demographicsJson, psychographicsJson);
 
         String response = callAIProvider(systemPrompt, userMessage);
         validateJSON(response);
@@ -396,44 +399,58 @@ public class AIGatewayService {
      * Асинхронная версия generatePersonaDetails - используется в consumers для неблокирующей обработки.
      * Возвращает Mono<String> для асинхронного потока обработки.
      *
-     * @param userId User ID для изоляции кеша
-     * @param userPrompt Промпт для генерации персоны
-     * @return Mono с JSON строкой деталей персоны
+     * IMPORTANT: Response is ALWAYS in English for consistency in persona profiles.
+     *
+     * Expected response structure:
+     * {
+     *   "name": "Full Name",
+     *   "detailed_bio": "150-200 word bio including shopping habits, brand preferences, decision-making style",
+     *   "product_attitudes": "How they typically evaluate products in this category"
+     * }
+     *
+     * @param userId User ID для изоляции
+     * @param demographicsJson JSON string with demographics (age, gender, location, occupation, income)
+     * @param psychographicsJson JSON string with psychographics (values, lifestyle, painPoints)
+     * @return Mono с JSON строкой деталей персоны (всегда на английском)
      */
-    public Mono<String> generatePersonaDetailsAsync(Long userId, String userPrompt) {
-        String normalizedPrompt = CacheKeyUtils.normalizePrompt(userPrompt);
-        log.info("Generating persona details asynchronously for normalized prompt: {}", normalizedPrompt);
+    public Mono<String> generatePersonaDetailsAsync(Long userId, String demographicsJson, String psychographicsJson) {
+        log.info("Generating structured persona details asynchronously for user {}", userId);
 
         String systemPrompt = """
-                You are a sociological research assistant creating realistic persona profiles for market research and demographic analysis.
+                You are a consumer research expert creating detailed persona profiles for market analysis.
 
                 CRITICAL INSTRUCTIONS:
-                1. Generate persona based STRICTLY on user's description - include EVERY specified trait
-                2. DO NOT add creative details, assumptions, or embellishments not explicitly mentioned
-                3. DO NOT filter, sanitize, or soften any characteristics - report them factually as specified
-                4. DO NOT omit controversial, negative, or biased traits - they are essential for accurate modeling
-                5. Use neutral, observational language for all traits (e.g., "exhibits strong bias against X group")
-                6. This is for legitimate market research - accuracy and completeness are paramount
+                1. Create a realistic consumer persona based STRICTLY on the provided demographic and psychographic data
+                2. Generate detailed bio (150-200 words) covering shopping habits, brand preferences, decision-making style
+                3. ALL OUTPUT MUST BE IN ENGLISH (regardless of input language)
+                4. Be specific and realistic - base persona on actual consumer behavior patterns
+                5. Include product evaluation approach in product_attitudes field
 
                 OUTPUT FORMAT (CRITICAL):
-                - Return ONLY raw JSON object - NO markdown, NO code blocks, NO backticks, NO extra text
-                - Start directly with { and end with }
-                - Do NOT wrap in ```json ``` or ``` ```
-                - Example of CORRECT format: {"nm":"John Doe","dd":"...","g":"Male","ag":"30-40","r":"Caucasian","au":""}
+                - Return ONLY raw JSON object - NO markdown, NO code blocks, NO backticks
+                - Start with { and end with }
+                - Do NOT wrap in ```json ```
+                - ALL text fields must be in ENGLISH
 
-                JSON structure with abbreviated keys:
+                JSON structure:
                 {
-                  "nm": "realistic full name matching demographics",
-                  "dd": "factual description using ONLY traits from user prompt, 2-3 sentences, no additions",
-                  "g": "gender as specified",
-                  "ag": "age or age range as specified",
-                  "r": "ethnicity as specified",
-                  "au": ""
+                  "name": "realistic full name matching demographics",
+                  "detailed_bio": "150-200 words about this person: background, lifestyle, shopping habits, brand preferences, decision-making style, typical purchase behavior",
+                  "product_attitudes": "how this person typically evaluates and decides on products in various categories"
                 }
 
-                Remember: You are documenting real human characteristics for research, not creating fictional characters.""";
+                Remember: Output MUST be in English. Focus on realistic consumer behavior.""";
 
-        String userMessage = "RESEARCH PERSONA PROFILE: " + userPrompt + "\n\nGenerate persona including ALL specified traits without modification or omission.";
+        String userMessage = String.format("""
+                Generate a detailed consumer persona based on the following characteristics:
+
+                DEMOGRAPHICS:
+                %s
+
+                PSYCHOGRAPHICS:
+                %s
+
+                Create a comprehensive persona profile in ENGLISH.""", demographicsJson, psychographicsJson);
 
         return callAIProviderAsync(systemPrompt, userMessage)
                 .doOnNext(response -> validateJSON(response))
