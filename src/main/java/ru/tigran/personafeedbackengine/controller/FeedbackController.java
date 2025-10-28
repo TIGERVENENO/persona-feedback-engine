@@ -86,8 +86,8 @@ public class FeedbackController {
     ) {
         // Extract user ID from JWT token stored in SecurityContext
         Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        log.info("POST /api/v1/feedback-sessions - user: {}, products: {}, personas: {}",
-                userId, request.productIds().size(), request.personaIds().size());
+        log.info("POST /api/v1/feedback-sessions - user: {}, products: {}",
+                userId, request.getProductIds().size());
 
         Long sessionId = feedbackService.startFeedbackSession(userId, request);
 

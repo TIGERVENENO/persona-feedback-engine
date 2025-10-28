@@ -252,7 +252,7 @@ public class FeedbackService {
                 Thread.currentThread().interrupt();
                 throw new ValidationException(
                         "Interrupted while waiting for personas",
-                        ErrorCode.INTERNAL_ERROR.getCode()
+                        ErrorCode.INTERNAL_SERVER_ERROR.getCode()
                 );
             }
         }

@@ -742,7 +742,7 @@ public class AIGatewayService {
                 """, concernsList);
 
         try {
-            String rawResponse = callAI(systemPrompt, userPrompt);
+            String rawResponse = callAIProvider(systemPrompt, userPrompt);
             String cleanedResponse = cleanMarkdownCodeBlocks(rawResponse);
 
             // Валидация что это валидный JSON array
@@ -751,7 +751,7 @@ public class AIGatewayService {
                 log.error("AI response is not a JSON array: {}", cleanedResponse);
                 throw new AIGatewayException(
                         "Invalid aggregation response format",
-                        ErrorCode.AI_RESPONSE_INVALID.getCode()
+                        ErrorCode.INVALID_AI_RESPONSE.getCode()
                 );
             }
 
@@ -761,7 +761,7 @@ public class AIGatewayService {
                     log.error("Invalid theme structure in response: {}", themeNode);
                     throw new AIGatewayException(
                             "Invalid theme structure in aggregation response",
-                            ErrorCode.AI_RESPONSE_INVALID.getCode()
+                            ErrorCode.INVALID_AI_RESPONSE.getCode()
                     );
                 }
             }

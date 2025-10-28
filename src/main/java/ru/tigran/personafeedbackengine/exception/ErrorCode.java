@@ -23,6 +23,8 @@ public enum ErrorCode {
     TOO_MANY_PERSONAS("TOO_MANY_PERSONAS", "Too many personas in request"),
     PERSONAS_NOT_READY("PERSONAS_NOT_READY", "Some personas are not ready for use"),
     DUPLICATE_REQUEST("DUPLICATE_REQUEST", "Duplicate request detected"),
+    PERSONA_GENERATION_FAILED("PERSONA_GENERATION_FAILED", "Persona generation failed"),
+    PERSONA_GENERATION_TIMEOUT("PERSONA_GENERATION_TIMEOUT", "Timeout waiting for persona generation"),
 
     // Authentication errors
     EMAIL_ALREADY_EXISTS("EMAIL_ALREADY_EXISTS", "Email already registered"),
