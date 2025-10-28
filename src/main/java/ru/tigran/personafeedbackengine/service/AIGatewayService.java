@@ -39,6 +39,8 @@ public class AIGatewayService {
     private static final String AGENTROUTER_API_URL = "https://api.agentrouter.ai/v1/chat/completions";
     // Maximum backoff delay to prevent excessive thread blocking (8 seconds max per retry)
     private static final long MAX_BACKOFF_MS = 8000;
+    // Maximum response size (1 MB) to prevent memory exhaustion DoS attacks
+    private static final long MAX_RESPONSE_SIZE_BYTES = 1024 * 1024;  // 1 MB
 
     public AIGatewayService(
             RestClient restClient,
@@ -439,10 +441,58 @@ public class AIGatewayService {
     }
 
     /**
+     * Masks sensitive API credentials for safe logging.
+     * Preserves first and last 3 characters of the key for debugging purposes.
+     *
+     * @param apiKey The API key to mask
+     * @return Masked API key (e.g., "sk-***...***xyz")
+     */
+    private String maskApiKey(String apiKey) {
+        if (apiKey == null || apiKey.length() <= 6) {
+            return "***MASKED***";
+        }
+        String prefix = apiKey.substring(0, 3);
+        String suffix = apiKey.substring(apiKey.length() - 3);
+        return prefix + "***" + suffix;
+    }
+
+    /**
+     * Validates that API response size doesn't exceed maximum allowed size.
+     * Prevents DoS attacks through memory exhaustion.
+     *
+     * @param responseBody API response as string
+     * @throws AIGatewayException if response exceeds MAX_RESPONSE_SIZE_BYTES
+     */
+    private void validateResponseSize(String responseBody) {
+        if (responseBody == null) {
+            return;
+        }
+
+        long responseSizeBytes = responseBody.length();
+        if (responseSizeBytes > MAX_RESPONSE_SIZE_BYTES) {
+            String errorMsg = String.format(
+                "API response exceeds maximum allowed size. Response size: %d bytes, max allowed: %d bytes. " +
+                "This could indicate a DoS attack or API misconfiguration.",
+                responseSizeBytes,
+                MAX_RESPONSE_SIZE_BYTES
+            );
+            log.error(errorMsg);
+            throw new AIGatewayException(
+                errorMsg,
+                ErrorCode.AI_SERVICE_ERROR.getCode(),
+                false  // Non-retriable as this indicates a fundamental issue
+            );
+        }
+    }
+
+    /**
      * Extracts the message content from OpenRouter API response.
      */
     private String extractMessageContent(String response) {
         try {
+            // Validate response size before processing
+            validateResponseSize(response);
+
             JsonNode root = objectMapper.readTree(response);
             JsonNode content = root.at("/choices/0/message/content");
 
