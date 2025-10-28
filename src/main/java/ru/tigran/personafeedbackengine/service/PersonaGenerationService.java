@@ -108,6 +108,9 @@ public class PersonaGenerationService {
      *
      * Required fields (new format):
      * - name: Persona full name
+     * - gender: male|female|non-binary
+     * - age_group: 18-24|25-34|35-44|45-54|55-64|65+
+     * - race: Asian|Caucasian|African|Hispanic|Middle Eastern|Indigenous|Mixed|Other
      * - detailed_bio: Detailed bio (150-200 words) about shopping habits, brand preferences, decision-making
      * - product_attitudes: How persona evaluates and decides on products
      *
@@ -115,13 +118,13 @@ public class PersonaGenerationService {
      * @throws AIGatewayException if any required field is missing or null
      */
     private void validatePersonaDetails(JsonNode details) {
-        String[] requiredFields = {"name", "detailed_bio", "product_attitudes"};
+        String[] requiredFields = {"name", "gender", "age_group", "race", "detailed_bio", "product_attitudes"};
 
         for (String field : requiredFields) {
             if (!details.has(field) || details.get(field).isNull()) {
                 String message = String.format(
                     "Missing or null required field in AI response: '%s'. " +
-                    "Expected JSON structure: {\"name\": \"...\", \"detailed_bio\": \"...\", \"product_attitudes\": \"...\"}",
+                    "Expected JSON structure: {\"name\": \"...\", \"gender\": \"...\", \"age_group\": \"...\", \"race\": \"...\", \"detailed_bio\": \"...\", \"product_attitudes\": \"...\"}",
                     field
                 );
                 log.error("Persona validation failed: {}", message);
@@ -136,19 +139,22 @@ public class PersonaGenerationService {
     /**
      * Updates Persona entity with generated details from AI.
      *
-     * New format maps:
+     * Field mapping:
      * - name → name
+     * - gender → gender
+     * - age_group → ageGroup
+     * - race → race
      * - detailed_bio → detailedDescription
      * - product_attitudes → productAttitudes
-     *
-     * Note: Gender, age, race fields are removed in new format.
-     * These are now derived from demographics in the request.
      *
      * @param persona Persona entity to update
      * @param details JsonNode with generated details
      */
     private void updatePersonaEntity(Persona persona, JsonNode details) {
         persona.setName(details.get("name").asText());
+        persona.setGender(details.get("gender").asText());
+        persona.setAgeGroup(details.get("age_group").asText());
+        persona.setRace(details.get("race").asText());
         persona.setDetailedDescription(details.get("detailed_bio").asText());
         persona.setProductAttitudes(details.get("product_attitudes").asText());
         persona.setStatus(Persona.PersonaStatus.ACTIVE);

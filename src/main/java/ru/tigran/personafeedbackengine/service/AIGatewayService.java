@@ -79,6 +79,9 @@ public class AIGatewayService {
      * Expected response structure:
      * {
      *   "name": "Full Name",
+     *   "gender": "male|female|non-binary",
+     *   "age_group": "18-24|25-34|35-44|45-54|55-64|65+",
+     *   "race": "Asian|Caucasian|African|Hispanic|Middle Eastern|Indigenous|Mixed|Other",
      *   "detailed_bio": "150-200 word bio including shopping habits, brand preferences, decision-making style",
      *   "product_attitudes": "How they typically evaluate products in this category"
      * }
@@ -101,6 +104,7 @@ public class AIGatewayService {
                 3. ALL OUTPUT MUST BE IN ENGLISH (regardless of input language)
                 4. Be specific and realistic - base persona on actual consumer behavior patterns
                 5. Include product evaluation approach in product_attitudes field
+                6. Provide gender, age_group, and race fields based on demographics and cultural patterns
 
                 OUTPUT FORMAT (CRITICAL):
                 - Return ONLY raw JSON object - NO markdown, NO code blocks, NO backticks
@@ -110,7 +114,10 @@ public class AIGatewayService {
 
                 JSON structure:
                 {
-                  "name": "realistic full name matching demographics",
+                  "name": "realistic full name matching demographics and gender",
+                  "gender": "male|female|non-binary",
+                  "age_group": "18-24|25-34|35-44|45-54|55-64|65+",
+                  "race": "Asian|Caucasian|African|Hispanic|Middle Eastern|Indigenous|Mixed|Other",
                   "detailed_bio": "150-200 words about this person: background, lifestyle, shopping habits, brand preferences, decision-making style, typical purchase behavior",
                   "product_attitudes": "how this person typically evaluates and decides on products in various categories"
                 }
