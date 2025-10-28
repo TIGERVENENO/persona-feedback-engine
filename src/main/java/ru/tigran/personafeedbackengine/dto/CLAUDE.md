@@ -6,11 +6,28 @@ Data transfer objects for API layer and message queue communication.
 ## API Request DTOs
 
 ### PersonaGenerationRequest
-- `prompt: String` - User-provided prompt for persona generation (max 2000 chars)
+Structured persona generation request with demographics and psychographics.
+- `demographics: PersonaDemographics` - Demographics data (required, validated)
+- `psychographics: PersonaPsychographics` - Psychographics data (required, validated)
+
+### PersonaDemographics
+- `age: String` - Age or age range (e.g., "30-40", "Senior")
+- `gender: String` - Gender (e.g., "Male", "Female", "Non-binary")
+- `location: String` - Geographic location (e.g., "New York, USA", "London, UK")
+- `occupation: String` - Job title or occupation (e.g., "Software Engineer", "Teacher")
+- `income: String` - Income range (e.g., "$50k-$75k", "Middle class")
+
+### PersonaPsychographics
+- `values: String` - Core values (e.g., "Sustainability, innovation")
+- `lifestyle: String` - Lifestyle description (e.g., "Active, tech-savvy")
+- `painPoints: String` - Key pain points (e.g., "Limited time, budget constraints")
 
 ### ProductRequest
 - `name: String` - Product name (required, 1-200 chars)
 - `description: String` - Product description (optional, max 5000 chars)
+- `price: BigDecimal` - Product price (optional, minimum 0.00)
+- `category: String` - Product category (optional, max 100 chars)
+- `keyFeatures: List<String>` - List of key product features (optional)
 
 ### FeedbackSessionRequest
 - `productIds: List<Long>` - Products to get feedback on (max 5)
@@ -27,17 +44,19 @@ Data transfer objects for API layer and message queue communication.
 ### PersonaResponse
 - `id: Long`
 - `name: String`
-- `detailedDescription: String`
-- `gender: String`
-- `ageGroup: String`
-- `race: String`
-- `avatarUrl: String`
-- `status: String`
+- `detailedDescription: String` - 150-200 word bio about shopping habits, brand preferences, decision-making
+- `productAttitudes: String` - How persona evaluates and decides on products
+- `status: String` - GENERATING, ACTIVE, FAILED
+
+Note: Personas are ALWAYS generated in English for consistency, regardless of input language.
 
 ### ProductResponse
 - `id: Long`
 - `name: String`
 - `description: String`
+- `price: BigDecimal` - Product price
+- `category: String` - Product category
+- `keyFeatures: List<String>` - List of key product features
 
 ### FeedbackSessionResponse
 - `id: Long`
@@ -51,8 +70,10 @@ Data transfer objects for API layer and message queue communication.
 
 ### FeedbackResultDTO
 - `id: Long`
-- `feedbackText: String`
-- `status: String`
+- `feedbackText: String` - Detailed review in specified language (3-5 sentences)
+- `purchaseIntent: Integer` - Purchase intent rating 1-10
+- `keyConcerns: List<String>` - Array of 2-4 main concerns/hesitations
+- `status: String` - PENDING, IN_PROGRESS, COMPLETED, FAILED
 - `personaId: Long`
 - `productId: Long`
 
@@ -68,11 +89,12 @@ Data transfer objects for API layer and message queue communication.
 ## Queue Message DTOs
 
 ### PersonaGenerationTask
-- `personaId: Long` - ID of Persona entity
-- `userPrompt: String` - Original prompt for generation
+- `personaId: Long` - ID of Persona entity to update
+- `demographicsJson: String` - JSON string with demographics (age, gender, location, occupation, income)
+- `psychographicsJson: String` - JSON string with psychographics (values, lifestyle, painPoints)
 
 ### FeedbackGenerationTask
 - `resultId: Long` - ID of FeedbackResult to update
-- `productId: Long` - Product being reviewed
-- `personaId: Long` - Persona providing feedback
-- `language: String` - ISO 639-1 language code for feedback generation
+- `productId: Long` - Product being reviewed (ID used to load full entity with price, category, keyFeatures)
+- `personaId: Long` - Persona providing feedback (ID used to load full entity with detailedDescription, productAttitudes)
+- `language: String` - ISO 639-1 language code for feedback text (EN, RU, FR, etc.)

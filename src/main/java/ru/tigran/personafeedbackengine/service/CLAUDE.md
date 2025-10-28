@@ -44,10 +44,9 @@ User registration and login service with JWT token generation and BCrypt passwor
 - Supports both **synchronous** (RestClient) and **asynchronous** (WebClient) HTTP calls
 - Synchronous calls: HTTP timeout 30s, retry logic for 429 errors only
 - Asynchronous calls: HTTP timeout 30s, retry logic for retriable errors (429, 502, 503, 504)
-- Token optimization via abbreviated JSON keys
 - Dynamic provider selection based on `app.ai.provider` configuration
 - Supports any LLM model (Claude, GPT-4o, Mistral, etc.)
-- **Research-focused prompts**: Designed to generate realistic, unfiltered persona profiles for market research without creative embellishments
+- **Consumer research focus**: Generates realistic personas and feedback for market analysis
 
 **Configuration:**
 - `app.ai.provider` - Choose between "openrouter" or "agentrouter"
@@ -55,18 +54,24 @@ User registration and login service with JWT token generation and BCrypt passwor
 - Models are independently configurable
 
 **Synchronous Methods (blocking):**
-- `generatePersonaDetails(Long userId, String userPrompt)`: Cacheable, generates detailed persona profile (cached by userId + prompt). Uses research-focused prompt to ensure accuracy and inclusion of ALL specified traits without filtering or creative additions. Designed for realistic market research personas.
-- `generateFeedbackForProduct(String personaDescription, String productDescription, String languageCode)`: Generates feedback text in specified language (not cached). Language code is ISO 639-1 format (EN, RU, FR, etc.)
+- `generatePersonaDetails(Long userId, String demographicsJson, String psychographicsJson)`:
+  - Cacheable (by userId + demographics + psychographics)
+  - Generates detailed persona profile with consumer behavior focus
+  - **Output ALWAYS in English** for consistency
+  - Returns JSON: `{name, detailed_bio (150-200 words), product_attitudes}`
+  - Focuses on shopping habits, brand preferences, decision-making style
+- `generateFeedbackForProduct(personaBio, personaProductAttitudes, productName, productDescription, productPrice, productCategory, productKeyFeatures, languageCode)`:
+  - Not cached (volatile, session-specific)
+  - Analyzes product based on persona's shopping habits and values
+  - Returns structured JSON: `{feedback (in languageCode), purchase_intent (1-10), key_concerns (array)}`
+  - Language code is ISO 639-1 format (EN, RU, FR, etc.)
 
 **Asynchronous Methods (non-blocking, returns Mono):**
-- `generatePersonaDetailsAsync(Long userId, String userPrompt)`: Async persona generation with non-blocking retry logic. Uses same research-focused prompt as sync version.
-- `generateFeedbackForProductAsync(String personaDescription, String productDescription, String languageCode)`: Async feedback generation in specified language
-
-**Persona Generation Philosophy:**
-- Prioritizes **accuracy over creativity** - includes ALL user-specified traits without omission
-- Uses **research context** framing to bypass content filters for realistic demographic modeling
-- Employs **neutral, observational language** for controversial traits (e.g., "exhibits bias against X")
-- Designed for legitimate market research where realistic personas (including negative traits) are essential
+- `generatePersonaDetailsAsync(Long userId, String demographicsJson, String psychographicsJson)`:
+  - Async persona generation with same output format as sync version
+  - **Output ALWAYS in English**
+- `generateFeedbackForProductAsync(personaBio, personaProductAttitudes, productName, productDescription, productPrice, productCategory, productKeyFeatures, languageCode)`:
+  - Async feedback generation with structured output
 
 **Response Processing:**
 - Automatically cleans markdown code blocks from AI responses (```json ... ```)
@@ -82,16 +87,20 @@ User registration and login service with JWT token generation and BCrypt passwor
 
 ### PersonaService
 - Entry point for persona generation workflow
-- `startPersonaGeneration(PersonaGenerationRequest request)`: Creates Persona entity (state: GENERATING) and publishes PersonaGenerationTask to queue
-- Validates request ownership and constraints
+- `startPersonaGeneration(Long userId, PersonaGenerationRequest request)`:
+  - Serializes demographics and psychographics to JSON strings
+  - Creates Persona entity (state: GENERATING)
+  - Publishes PersonaGenerationTask to queue with demographicsJson and psychographicsJson
+  - Stores combined JSON as generationPrompt for cache key purposes
+- Validates user existence
 
 ### ProductService
 - CRUD operations for products with user ownership validation
 - **Methods:**
-  - `createProduct(Long userId, ProductRequest request) → ProductResponse`: Creates new product for user
+  - `createProduct(Long userId, ProductRequest request) → ProductResponse`: Creates new product with price, category, keyFeatures
   - `getProduct(Long userId, Long productId) → ProductResponse`: Gets product by ID with ownership check
   - `getAllProducts(Long userId) → List<ProductResponse>`: Gets all non-deleted products for user
-  - `updateProduct(Long userId, Long productId, ProductRequest request) → ProductResponse`: Updates existing product
+  - `updateProduct(Long userId, Long productId, ProductRequest request) → ProductResponse`: Updates existing product including new fields
   - `deleteProduct(Long userId, Long productId)`: Soft deletes product (sets deleted=true)
 - All operations validate user ownership before executing
 - Throws ValidationException if product not found or access denied
@@ -120,14 +129,17 @@ User registration and login service with JWT token generation and BCrypt passwor
 - **Methods:**
   - `generatePersona(PersonaGenerationTask task)`: Orchestrates persona generation
     1. Fetch Persona entity and validate state (idempotency check)
-    2. Call AIGatewayService to generate details
+    2. Call AIGatewayService.generatePersonaDetails(userId, demographicsJson, psychographicsJson)
     3. Parse and validate JSON response
-    4. Update Persona entity with generated details
+    4. Update Persona entity with generated details (name, detailedDescription, productAttitudes)
     5. Persist changes to database
 - **Private methods:**
   - `parsePersonaDetails(String json)`: Parses JSON response from AI
-  - `validatePersonaDetails(JsonNode details)`: Validates required fields (nm, dd, g, ag, r, au)
+  - `validatePersonaDetails(JsonNode details)`: Validates required fields (name, detailed_bio, product_attitudes)
   - `updatePersonaEntity(Persona persona, JsonNode details)`: Maps JSON fields to entity properties
+    - name → name
+    - detailed_bio → detailedDescription
+    - product_attitudes → productAttitudes
 
 ### FeedbackGenerationService
 - **Responsibility**: Core feedback generation business logic and session completion
@@ -139,14 +151,24 @@ User registration and login service with JWT token generation and BCrypt passwor
     1. Fetch FeedbackResult, Persona, Product entities
     2. Check idempotency (skip if COMPLETED)
     3. Mark result as IN_PROGRESS
-    4. Call AIGatewayService to generate feedback
-    5. Update FeedbackResult with generated text
-    6. Check and update session completion status
+    4. Call AIGatewayService.generateFeedbackForProduct() with:
+       - persona.detailedDescription (bio)
+       - persona.productAttitudes
+       - product.name, description, price, category, keyFeatures
+       - task.language
+    5. Parse JSON response (feedback, purchase_intent, key_concerns)
+    6. Validate purchase_intent in range 1-10, key_concerns is array
+    7. Update FeedbackResult with all fields
+    8. Check and update session completion status
   - `checkAndUpdateSessionCompletion(Long sessionId)`: Atomically updates session status
     - Uses distributed lock (Redisson) with 10-second timeout
     - Checks if all results for session are done (completed + failed >= total)
     - Updates session status to COMPLETED if all results done
     - Handles InterruptedException and general exceptions
+- **Private methods:**
+  - `parseFeedbackResponse(String json)`: Parses JSON response from AI
+  - `validateFeedbackResponse(JsonNode data)`: Validates required fields (feedback, purchase_intent, key_concerns)
+  - `extractKeyConcerns(JsonNode node)`: Extracts concerns array from JSON
 
 ## Responsibilities
 - Input validation and ownership checks
