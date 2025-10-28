@@ -234,6 +234,7 @@ public class FeedbackGenerationService {
      * When session is complete, aggregates insights from all results.
      *
      * @param sessionId ID of the feedback session
+     * @throws AIGatewayException if lock cannot be acquired (should be retried)
      */
     private void checkAndUpdateSessionCompletion(Long sessionId) {
         String lockKey = "feedback-session-lock:" + sessionId;
@@ -243,8 +244,19 @@ public class FeedbackGenerationService {
             // Try to acquire lock with 10 second timeout
             boolean locked = lock.tryLock(10, TimeUnit.SECONDS);
             if (!locked) {
-                log.warn("Could not acquire lock for feedback session {}", sessionId);
-                return;
+                // Lock acquisition failed - throw exception to trigger retry through queue
+                String errorMsg = String.format(
+                    "Failed to acquire lock for feedback session %d after 10 seconds. " +
+                    "This likely indicates high contention or Redis connectivity issues. " +
+                    "The task will be retried.",
+                    sessionId
+                );
+                log.warn(errorMsg);
+                throw new AIGatewayException(
+                    errorMsg,
+                    ErrorCode.AI_SERVICE_ERROR.getCode(),
+                    true  // Mark as retriable so queue consumer retries this
+                );
             }
 
             try {
@@ -252,6 +264,7 @@ public class FeedbackGenerationService {
                         .orElse(null);
 
                 if (session == null) {
+                    log.warn("Feedback session {} not found during completion check", sessionId);
                     return;
                 }
 
@@ -260,6 +273,9 @@ public class FeedbackGenerationService {
 
                 // If all results are done (completed or failed), aggregate insights and mark session as completed
                 if (statusInfo.completed() + statusInfo.failed() >= statusInfo.total()) {
+                    log.info("Session {} completion criteria met: {}/{} results done",
+                            sessionId, statusInfo.completed() + statusInfo.failed(), statusInfo.total());
+
                     // Агрегируем insights из всех результатов
                     String aggregatedInsightsJson = aggregateSessionInsights(sessionId);
 
@@ -274,16 +290,44 @@ public class FeedbackGenerationService {
                     );
                     if (updated > 0) {
                         log.info("Feedback session {} marked as COMPLETED with aggregated insights", sessionId);
+                    } else {
+                        log.debug("Session {} was already marked as COMPLETED by another instance", sessionId);
                     }
+                } else {
+                    log.debug("Session {} not yet complete: {}/{} results done",
+                            sessionId, statusInfo.completed() + statusInfo.failed(), statusInfo.total());
                 }
             } finally {
                 lock.unlock();
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.error("Interrupted while acquiring lock for feedback session {}", sessionId, e);
+            String errorMsg = String.format(
+                "Interrupted while acquiring lock for feedback session %d. " +
+                "The task will be retried.",
+                sessionId
+            );
+            log.warn(errorMsg, e);
+            throw new AIGatewayException(
+                errorMsg,
+                ErrorCode.AI_SERVICE_ERROR.getCode(),
+                true  // Mark as retriable
+            );
+        } catch (AIGatewayException e) {
+            // Re-throw AIGatewayException as-is (includes lock acquisition failures)
+            throw e;
         } catch (Exception e) {
-            log.error("Error updating feedback session completion status for session {}", sessionId, e);
+            String errorMsg = String.format(
+                "Unexpected error updating feedback session %d completion status. " +
+                "The task will be retried.",
+                sessionId
+            );
+            log.error(errorMsg, e);
+            throw new AIGatewayException(
+                errorMsg,
+                ErrorCode.AI_SERVICE_ERROR.getCode(),
+                true  // Mark as retriable so queue consumer retries this
+            );
         }
     }
 
