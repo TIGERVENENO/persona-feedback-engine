@@ -50,6 +50,9 @@ public class ProductService {
         Product product = new Product();
         product.setName(request.name());
         product.setDescription(request.description());
+        product.setPrice(request.price());
+        product.setCategory(request.category());
+        product.setKeyFeatures(request.keyFeatures());
         product.setUser(user);
         product.setDeleted(false);
 
@@ -130,6 +133,9 @@ public class ProductService {
 
         product.setName(request.name());
         product.setDescription(request.description());
+        product.setPrice(request.price());
+        product.setCategory(request.category());
+        product.setKeyFeatures(request.keyFeatures());
 
         Product saved = productRepository.save(product);
         log.info("Product {} updated successfully", productId);
