@@ -102,6 +102,33 @@ public class FeedbackGenerationService {
                         ErrorCode.PERSONA_NOT_FOUND.getCode()
                 ));
 
+        // Validate persona has required fields (#3.1 - Null Pointer Exception checks)
+        if (persona.getDetailedDescription() == null || persona.getDetailedDescription().isBlank()) {
+            String errorMsg = String.format(
+                "Persona %d is missing required field: detailedDescription. " +
+                "Persona must be fully generated (state=ACTIVE) before feedback generation.",
+                persona.getId()
+            );
+            log.error(errorMsg);
+            throw new AIGatewayException(
+                errorMsg,
+                ErrorCode.INVALID_AI_RESPONSE.getCode()
+            );
+        }
+
+        if (persona.getProductAttitudes() == null || persona.getProductAttitudes().isBlank()) {
+            String errorMsg = String.format(
+                "Persona %d is missing required field: productAttitudes. " +
+                "Persona must be fully generated (state=ACTIVE) before feedback generation.",
+                persona.getId()
+            );
+            log.error(errorMsg);
+            throw new AIGatewayException(
+                errorMsg,
+                ErrorCode.INVALID_AI_RESPONSE.getCode()
+            );
+        }
+
         Product product = productRepository.findById(task.productId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Product not found",
@@ -160,18 +187,22 @@ public class FeedbackGenerationService {
 
     /**
      * Validates that all required fields are present in the AI feedback response JSON.
+     * Performs comprehensive validation including type checks, range checks, and size constraints.
      *
-     * Required fields:
-     * - feedback: Detailed review text in specified language
+     * Required fields with constraints:
+     * - feedback: Detailed review text (non-empty string, max 2000 chars)
      * - purchase_intent: Integer 1-10
-     * - key_concerns: Array of concerns/hesitations
+     * - key_concerns: Array of 2-4 string concerns
      *
      * @param feedbackData JsonNode with feedback data from AI
-     * @throws AIGatewayException if any required field is missing or null
+     * @throws AIGatewayException if any field is invalid, missing, or doesn't meet constraints
      */
     private void validateFeedbackResponse(JsonNode feedbackData) {
+        // (#3.2 - Incomplete JSON Validation) - Comprehensive validation
+
         String[] requiredFields = {"feedback", "purchase_intent", "key_concerns"};
 
+        // 1. Check all required fields exist and are not null
         for (String field : requiredFields) {
             if (!feedbackData.has(field) || feedbackData.get(field).isNull()) {
                 String message = String.format(
@@ -187,8 +218,39 @@ public class FeedbackGenerationService {
             }
         }
 
-        // Validate purchase_intent is within range
-        int purchaseIntent = feedbackData.get("purchase_intent").asInt();
+        // 2. Validate feedback field (string, non-empty, max 2000 chars)
+        JsonNode feedbackNode = feedbackData.get("feedback");
+        if (!feedbackNode.isTextual()) {
+            String message = "feedback field must be a string";
+            log.error("Feedback validation failed: {}", message);
+            throw new AIGatewayException(message, ErrorCode.INVALID_AI_RESPONSE.getCode());
+        }
+
+        String feedbackText = feedbackNode.asText();
+        if (feedbackText.isBlank()) {
+            String message = "feedback field must not be empty";
+            log.error("Feedback validation failed: {}", message);
+            throw new AIGatewayException(message, ErrorCode.INVALID_AI_RESPONSE.getCode());
+        }
+
+        if (feedbackText.length() > 2000) {
+            String message = String.format(
+                "feedback field exceeds maximum length of 2000 characters (got %d chars)",
+                feedbackText.length()
+            );
+            log.error("Feedback validation failed: {}", message);
+            throw new AIGatewayException(message, ErrorCode.INVALID_AI_RESPONSE.getCode());
+        }
+
+        // 3. Validate purchase_intent field (integer, range 1-10)
+        JsonNode intentNode = feedbackData.get("purchase_intent");
+        if (!intentNode.isIntegralNumber()) {
+            String message = "purchase_intent must be an integer";
+            log.error("Feedback validation failed: {}", message);
+            throw new AIGatewayException(message, ErrorCode.INVALID_AI_RESPONSE.getCode());
+        }
+
+        int purchaseIntent = intentNode.asInt();
         if (purchaseIntent < 1 || purchaseIntent > 10) {
             String message = String.format(
                 "purchase_intent must be between 1 and 10, got: %d",
@@ -201,8 +263,9 @@ public class FeedbackGenerationService {
             );
         }
 
-        // Validate key_concerns is an array
-        if (!feedbackData.get("key_concerns").isArray()) {
+        // 4. Validate key_concerns field (array of 2-4 string items)
+        JsonNode concernsNode = feedbackData.get("key_concerns");
+        if (!concernsNode.isArray()) {
             String message = "key_concerns must be an array";
             log.error("Feedback validation failed: {}", message);
             throw new AIGatewayException(
@@ -210,6 +273,48 @@ public class FeedbackGenerationService {
                 ErrorCode.INVALID_AI_RESPONSE.getCode()
             );
         }
+
+        int concernCount = concernsNode.size();
+        if (concernCount < 2 || concernCount > 4) {
+            String message = String.format(
+                "key_concerns must contain between 2 and 4 items, got: %d",
+                concernCount
+            );
+            log.error("Feedback validation failed: {}", message);
+            throw new AIGatewayException(message, ErrorCode.INVALID_AI_RESPONSE.getCode());
+        }
+
+        // 5. Validate each concern is a non-empty string
+        for (int i = 0; i < concernCount; i++) {
+            JsonNode concern = concernsNode.get(i);
+            if (!concern.isTextual()) {
+                String message = String.format(
+                    "key_concerns[%d] must be a string, got: %s",
+                    i, concern.getNodeType()
+                );
+                log.error("Feedback validation failed: {}", message);
+                throw new AIGatewayException(message, ErrorCode.INVALID_AI_RESPONSE.getCode());
+            }
+
+            String concernText = concern.asText();
+            if (concernText.isBlank()) {
+                String message = String.format("key_concerns[%d] must not be empty", i);
+                log.error("Feedback validation failed: {}", message);
+                throw new AIGatewayException(message, ErrorCode.INVALID_AI_RESPONSE.getCode());
+            }
+
+            if (concernText.length() > 500) {
+                String message = String.format(
+                    "key_concerns[%d] exceeds maximum length of 500 characters (got %d chars)",
+                    i, concernText.length()
+                );
+                log.error("Feedback validation failed: {}", message);
+                throw new AIGatewayException(message, ErrorCode.INVALID_AI_RESPONSE.getCode());
+            }
+        }
+
+        log.debug("Feedback validation passed: feedback={} chars, intent={}, concerns={} items",
+                feedbackText.length(), purchaseIntent, concernCount);
     }
 
     /**
