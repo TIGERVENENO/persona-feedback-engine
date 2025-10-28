@@ -7,6 +7,7 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.tigran.personafeedbackengine.dto.AggregatedInsights;
 import ru.tigran.personafeedbackengine.dto.FeedbackGenerationTask;
 import ru.tigran.personafeedbackengine.dto.SessionStatusInfo;
 import ru.tigran.personafeedbackengine.exception.AIGatewayException;
@@ -24,6 +25,7 @@ import ru.tigran.personafeedbackengine.repository.ProductRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Service for feedback generation business logic.
@@ -229,6 +231,7 @@ public class FeedbackGenerationService {
     /**
      * Checks if all feedback results for a session are done and updates session status.
      * Uses distributed locking to ensure atomic updates across multiple instances.
+     * When session is complete, aggregates insights from all results.
      *
      * @param sessionId ID of the feedback session
      */
@@ -255,14 +258,22 @@ public class FeedbackGenerationService {
                 // Get current session status
                 SessionStatusInfo statusInfo = feedbackResultRepository.getSessionStatus(sessionId);
 
-                // If all results are done (completed or failed), mark session as completed
+                // If all results are done (completed or failed), aggregate insights and mark session as completed
                 if (statusInfo.completed() + statusInfo.failed() >= statusInfo.total()) {
+                    // Агрегируем insights из всех результатов
+                    String aggregatedInsightsJson = aggregateSessionInsights(sessionId);
+
+                    // Сохраняем aggregated insights в session
+                    session.setAggregatedInsights(aggregatedInsightsJson);
+                    feedbackSessionRepository.save(session);
+
+                    // Обновляем статус сессии
                     int updated = feedbackSessionRepository.updateStatusIfNotAlready(
                             sessionId,
                             FeedbackSession.FeedbackSessionStatus.COMPLETED
                     );
                     if (updated > 0) {
-                        log.info("Feedback session {} marked as COMPLETED", sessionId);
+                        log.info("Feedback session {} marked as COMPLETED with aggregated insights", sessionId);
                     }
                 }
             } finally {
@@ -273,6 +284,87 @@ public class FeedbackGenerationService {
             log.error("Interrupted while acquiring lock for feedback session {}", sessionId, e);
         } catch (Exception e) {
             log.error("Error updating feedback session completion status for session {}", sessionId, e);
+        }
+    }
+
+    /**
+     * Агрегирует insights из всех completed feedback results сессии.
+     *
+     * Вычисляет:
+     * - averageScore: Средний purchase intent (1-10)
+     * - purchaseIntentPercent: Процент персон с purchaseIntent >= 7
+     * - keyThemes: Агрегированные темы через AI (из всех keyConcerns)
+     *
+     * @param sessionId ID сессии
+     * @return JSON строка с AggregatedInsights
+     */
+    private String aggregateSessionInsights(Long sessionId) {
+        log.info("Aggregating insights for feedback session {}", sessionId);
+
+        // Загружаем все COMPLETED результаты
+        List<FeedbackResult> results = feedbackResultRepository.findByFeedbackSessionId(sessionId)
+                .stream()
+                .filter(r -> r.getStatus() == FeedbackResult.FeedbackResultStatus.COMPLETED)
+                .collect(Collectors.toList());
+
+        if (results.isEmpty()) {
+            log.warn("No completed results found for session {}, returning empty insights", sessionId);
+            try {
+                AggregatedInsights emptyInsights = new AggregatedInsights(0.0, 0, List.of());
+                return objectMapper.writeValueAsString(emptyInsights);
+            } catch (Exception e) {
+                return "{\"averageScore\":0,\"purchaseIntentPercent\":0,\"keyThemes\":[]}";
+            }
+        }
+
+        // 1. Вычисляем averageScore (средний purchaseIntent)
+        double averageScore = results.stream()
+                .mapToInt(FeedbackResult::getPurchaseIntent)
+                .average()
+                .orElse(0.0);
+
+        // 2. Вычисляем purchaseIntentPercent (% с intent >= 7)
+        long highIntentCount = results.stream()
+                .filter(r -> r.getPurchaseIntent() >= 7)
+                .count();
+        int purchaseIntentPercent = (int) Math.round((double) highIntentCount / results.size() * 100);
+
+        // 3. Собираем все keyConcerns из всех результатов
+        List<String> allConcerns = results.stream()
+                .flatMap(r -> r.getKeyConcerns().stream())
+                .collect(Collectors.toList());
+
+        // 4. Агрегируем темы через AI
+        String keyThemesJson = aiGatewayService.aggregateKeyThemes(allConcerns);
+
+        try {
+            // Парсим keyThemes JSON в список KeyTheme объектов
+            JsonNode themesNode = objectMapper.readTree(keyThemesJson);
+            List<AggregatedInsights.KeyTheme> keyThemes = new ArrayList<>();
+
+            for (JsonNode themeNode : themesNode) {
+                String theme = themeNode.get("theme").asText();
+                Integer mentions = themeNode.get("mentions").asInt();
+                keyThemes.add(new AggregatedInsights.KeyTheme(theme, mentions));
+            }
+
+            // Создаём AggregatedInsights DTO
+            AggregatedInsights insights = new AggregatedInsights(
+                    averageScore,
+                    purchaseIntentPercent,
+                    keyThemes
+            );
+
+            // Сериализуем в JSON
+            String insightsJson = objectMapper.writeValueAsString(insights);
+            log.info("Aggregated insights for session {}: avgScore={}, intentPercent={}%, themes={}",
+                    sessionId, averageScore, purchaseIntentPercent, keyThemes.size());
+
+            return insightsJson;
+
+        } catch (Exception e) {
+            log.error("Failed to aggregate session insights for session {}", sessionId, e);
+            throw new RuntimeException("Failed to aggregate session insights", e);
         }
     }
 }
