@@ -7,6 +7,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.type.SqlTypes;
+import org.hibernate.annotations.JdbcTypeCode;
 
 @Entity
 @Table(name = "personas", indexes = {
@@ -55,6 +57,7 @@ public class Persona extends AuditableEntity {
     private String incomeLevel;  // "low", "medium", "high"
 
     @Column(columnDefinition = "JSONB")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String demographicsHash;  // JSON hash for uniqueness and caching
 
     @Enumerated(EnumType.STRING)
