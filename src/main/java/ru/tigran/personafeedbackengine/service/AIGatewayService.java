@@ -686,6 +686,100 @@ public class AIGatewayService {
     }
 
     /**
+     * Агрегирует и группирует ключевые темы из всех feedback results сессии.
+     *
+     * Принимает плоский список всех key concerns из всех feedback results,
+     * использует AI для группировки похожих тем и подсчёта упоминаний.
+     *
+     * Пример входных данных:
+     * ["Price too high", "Expensive", "Great design", "Love the colors", "Too expensive"]
+     *
+     * Пример выходных данных:
+     * [
+     *   {"theme": "Price concerns", "mentions": 3},
+     *   {"theme": "Design appreciation", "mentions": 2}
+     * ]
+     *
+     * @param allConcerns Плоский список всех key concerns из feedback results
+     * @return JSON array с агрегированными темами [{"theme": "...", "mentions": N}, ...]
+     */
+    public String aggregateKeyThemes(java.util.List<String> allConcerns) {
+        log.info("Aggregating {} key concerns into themes", allConcerns.size());
+
+        if (allConcerns.isEmpty()) {
+            log.warn("No concerns to aggregate, returning empty array");
+            return "[]";
+        }
+
+        // Формируем список concerns для промпта
+        String concernsList = String.join("\n- ", allConcerns);
+
+        String systemPrompt = """
+                You are an expert market researcher analyzing consumer feedback.
+
+                Your task is to:
+                1. Group similar concerns/themes together
+                2. Count how many times each theme was mentioned (considering variations)
+                3. Return ONLY the top 5-7 most important themes
+                4. Use clear, concise theme descriptions
+
+                CRITICAL: Return ONLY valid JSON array, no markdown, no explanation.
+                Format: [{"theme": "Description", "mentions": N}, ...]
+
+                Example output:
+                [
+                  {"theme": "Price concerns", "mentions": 4},
+                  {"theme": "Design quality", "mentions": 3}
+                ]
+                """;
+
+        String userPrompt = String.format("""
+                Analyze and group these consumer concerns into key themes:
+
+                %s
+
+                Return JSON array with grouped themes and mention counts.
+                """, concernsList);
+
+        try {
+            String rawResponse = callAI(systemPrompt, userPrompt);
+            String cleanedResponse = cleanMarkdownCodeBlocks(rawResponse);
+
+            // Валидация что это валидный JSON array
+            JsonNode jsonNode = objectMapper.readTree(cleanedResponse);
+            if (!jsonNode.isArray()) {
+                log.error("AI response is not a JSON array: {}", cleanedResponse);
+                throw new AIGatewayException(
+                        "Invalid aggregation response format",
+                        ErrorCode.AI_RESPONSE_INVALID.getCode()
+                );
+            }
+
+            // Валидация структуры каждой темы
+            for (JsonNode themeNode : jsonNode) {
+                if (!themeNode.has("theme") || !themeNode.has("mentions")) {
+                    log.error("Invalid theme structure in response: {}", themeNode);
+                    throw new AIGatewayException(
+                            "Invalid theme structure in aggregation response",
+                            ErrorCode.AI_RESPONSE_INVALID.getCode()
+                    );
+                }
+            }
+
+            log.info("Successfully aggregated concerns into {} themes", jsonNode.size());
+            return cleanedResponse;
+
+        } catch (Exception e) {
+            log.error("Failed to aggregate key themes", e);
+            throw new AIGatewayException(
+                    "Theme aggregation failed: " + e.getMessage(),
+                    ErrorCode.AI_SERVICE_ERROR.getCode(),
+                    e
+            );
+        }
+    }
+
+    /**
      * Internal exception for retriable errors in async processing.
      */
     private static class RetriableAIException extends RuntimeException {
