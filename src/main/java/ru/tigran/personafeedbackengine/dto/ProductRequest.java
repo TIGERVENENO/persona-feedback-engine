@@ -14,6 +14,7 @@ import java.util.List;
  * - name: Обязательное поле, не может быть пустым, 1-200 символов
  * - description: Опциональное поле, до 5000 символов
  * - price: Опциональное, минимум 0.00
+ * - currency: Опциональное, 3-символьный ISO 4217 код (USD, RUB, EUR и т.д.)
  * - category: Опциональное, до 100 символов
  * - keyFeatures: Опциональный список ключевых характеристик
  */
@@ -27,6 +28,9 @@ public record ProductRequest(
 
         @DecimalMin(value = "0.00", message = "Цена не может быть отрицательной")
         BigDecimal price,
+
+        @Size(min = 3, max = 3, message = "Валюта должна быть ISO 4217 кодом (3 символа)")
+        String currency,
 
         @Size(max = 100, message = "Категория не должна превышать 100 символов")
         String category,

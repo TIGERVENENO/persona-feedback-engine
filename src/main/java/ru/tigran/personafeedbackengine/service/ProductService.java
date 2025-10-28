@@ -51,6 +51,7 @@ public class ProductService {
         product.setName(request.name());
         product.setDescription(request.description());
         product.setPrice(request.price());
+        product.setCurrency(request.currency());
         product.setCategory(request.category());
         product.setKeyFeatures(request.keyFeatures());
         product.setUser(user);
@@ -134,6 +135,7 @@ public class ProductService {
         product.setName(request.name());
         product.setDescription(request.description());
         product.setPrice(request.price());
+        product.setCurrency(request.currency());
         product.setCategory(request.category());
         product.setKeyFeatures(request.keyFeatures());
 
@@ -175,6 +177,7 @@ public class ProductService {
                 product.getName(),
                 product.getDescription(),
                 product.getPrice(),
+                product.getCurrency(),
                 product.getCategory(),
                 product.getKeyFeatures()
         );

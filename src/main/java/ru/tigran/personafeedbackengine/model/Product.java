@@ -32,6 +32,9 @@ public class Product extends AuditableEntity {
     @Column(precision = 10, scale = 2)
     private java.math.BigDecimal price;
 
+    @Column(length = 3)
+    private String currency;
+
     @Column(length = 100)
     private String category;
 

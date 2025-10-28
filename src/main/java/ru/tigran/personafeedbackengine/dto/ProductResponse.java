@@ -8,6 +8,7 @@ public record ProductResponse(
         String name,
         String description,
         BigDecimal price,
+        String currency,
         String category,
         List<String> keyFeatures
 ) {
