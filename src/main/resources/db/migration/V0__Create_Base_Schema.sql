@@ -115,19 +115,18 @@ CREATE INDEX IF NOT EXISTS idx_feedback_results_session_product_persona ON feedb
 -- ============================================================================
 
 -- TEST USER
-INSERT INTO users (id, email, password_hash, is_active, deleted, created_at, updated_at)
-VALUES (1, 'testuser@example.com', '$2a$10$abcdefghijklmnopqrstuvwxyz', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO users (email, password_hash, is_active, deleted, created_at, updated_at)
+VALUES ('testuser@example.com', '$2a$10$abcdefghijklmnopqrstuvwxyz', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- TEST PRODUCTS
-INSERT INTO products (id, name, description, user_id, deleted, created_at, updated_at)
+INSERT INTO products (name, description, user_id, deleted, created_at, updated_at)
 VALUES
-  (1, 'Premium Coffee Maker', 'A state-of-the-art coffee maker with programmable brewing and built-in grinder', 1, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-  (2, 'Noise-Canceling Headphones', 'Professional-grade wireless headphones with active noise cancellation', 1, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+  ('Premium Coffee Maker', 'A state-of-the-art coffee maker with programmable brewing and built-in grinder', 1, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  ('Noise-Canceling Headphones', 'Professional-grade wireless headphones with active noise cancellation', 1, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- TEST PERSONA
-INSERT INTO personas (id, name, detailed_description, gender, age_group, race, avatar_url, status, generation_prompt, user_id, deleted, created_at, updated_at)
+INSERT INTO personas (name, detailed_description, gender, age_group, race, avatar_url, status, generation_prompt, user_id, deleted, created_at, updated_at)
 VALUES (
-  1,
   'Sarah Miller',
   'Sarah is a busy marketing manager in her early 30s who values convenience and quality in her daily tech purchases',
   'Female',
