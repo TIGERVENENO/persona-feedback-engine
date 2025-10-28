@@ -218,7 +218,6 @@ public class PersonaService {
 
             personaGenerationInitiatedCounter.increment();
             return savedPersona.getId();
-
         } catch (Exception e) {
             throw new ValidationException(
                     "Failed to create persona from variation: " + e.getMessage(),

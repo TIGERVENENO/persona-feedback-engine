@@ -24,8 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 import ru.tigran.personafeedbackengine.dto.FeedbackSessionRequest;
 import ru.tigran.personafeedbackengine.dto.FeedbackSessionResponse;
 import ru.tigran.personafeedbackengine.dto.JobResponse;
+import ru.tigran.personafeedbackengine.exception.UnauthorizedException;
 import ru.tigran.personafeedbackengine.service.FeedbackService;
 import ru.tigran.personafeedbackengine.service.FeedbackQueryService;
+import java.util.Optional;
 
 @Slf4j
 @RestController
@@ -43,6 +45,23 @@ public class FeedbackController {
     ) {
         this.feedbackService = feedbackService;
         this.feedbackQueryService = feedbackQueryService;
+    }
+
+    /**
+     * Безопасно извлекает userId из SecurityContext.
+     * Выкидывает UnauthorizedException если токен отсутствует или невалиден.
+     *
+     * @return User ID из JWT токена
+     * @throws UnauthorizedException если аутентификация отсутствует
+     */
+    private Long extractAuthenticatedUserId() {
+        return Optional
+                .ofNullable(SecurityContextHolder.getContext().getAuthentication())
+                .map(auth -> (Long) auth.getPrincipal())
+                .orElseThrow(() -> new UnauthorizedException(
+                        "Missing or invalid JWT token in Authorization header",
+                        "MISSING_AUTHENTICATION"
+                ));
     }
 
     /**
@@ -84,8 +103,8 @@ public class FeedbackController {
     public ResponseEntity<JobResponse> startFeedbackSession(
             @Valid @RequestBody FeedbackSessionRequest request
     ) {
-        // Extract user ID from JWT token stored in SecurityContext
-        Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        // Extract user ID from JWT token stored in SecurityContext (safe extraction with null check)
+        Long userId = extractAuthenticatedUserId();
         log.info("POST /api/v1/feedback-sessions - user: {}, products: {}",
                 userId, request.getProductIds().size());
 
@@ -149,8 +168,8 @@ public class FeedbackController {
             @Parameter(description = "Размер страницы, опционально", example = "10")
             Integer size
     ) {
-        // Extract user ID from JWT token stored in SecurityContext
-        Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        // Extract user ID from JWT token stored in SecurityContext (safe extraction with null check)
+        Long userId = extractAuthenticatedUserId();
         log.info("GET /api/v1/feedback-sessions/{} - user: {}, page: {}, size: {}", sessionId, userId, page, size);
 
         FeedbackSessionResponse response;
