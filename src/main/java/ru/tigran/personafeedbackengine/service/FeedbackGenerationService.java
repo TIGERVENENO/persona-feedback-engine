@@ -1,5 +1,7 @@
 package ru.tigran.personafeedbackengine.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -7,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.tigran.personafeedbackengine.dto.FeedbackGenerationTask;
 import ru.tigran.personafeedbackengine.dto.SessionStatusInfo;
+import ru.tigran.personafeedbackengine.exception.AIGatewayException;
 import ru.tigran.personafeedbackengine.exception.ErrorCode;
 import ru.tigran.personafeedbackengine.exception.ResourceNotFoundException;
 import ru.tigran.personafeedbackengine.model.FeedbackResult;
@@ -18,6 +21,8 @@ import ru.tigran.personafeedbackengine.repository.FeedbackSessionRepository;
 import ru.tigran.personafeedbackengine.repository.PersonaRepository;
 import ru.tigran.personafeedbackengine.repository.ProductRepository;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -35,6 +40,7 @@ public class FeedbackGenerationService {
     private final ProductRepository productRepository;
     private final AIGatewayService aiGatewayService;
     private final RedissonClient redissonClient;
+    private final ObjectMapper objectMapper;
 
     public FeedbackGenerationService(
             FeedbackResultRepository feedbackResultRepository,
@@ -42,7 +48,8 @@ public class FeedbackGenerationService {
             PersonaRepository personaRepository,
             ProductRepository productRepository,
             AIGatewayService aiGatewayService,
-            RedissonClient redissonClient
+            RedissonClient redissonClient,
+            ObjectMapper objectMapper
     ) {
         this.feedbackResultRepository = feedbackResultRepository;
         this.feedbackSessionRepository = feedbackSessionRepository;
@@ -50,6 +57,7 @@ public class FeedbackGenerationService {
         this.productRepository = productRepository;
         this.aiGatewayService = aiGatewayService;
         this.redissonClient = redissonClient;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -98,21 +106,124 @@ public class FeedbackGenerationService {
                         ErrorCode.PRODUCT_NOT_FOUND.getCode()
                 ));
 
-        // Generate feedback via AI
-        String feedback = aiGatewayService.generateFeedbackForProduct(
-                persona.getDetailedDescription(),
+        // Generate feedback via AI with detailed product and persona information
+        String feedbackJson = aiGatewayService.generateFeedbackForProduct(
+                persona.getDetailedDescription(),  // detailed_bio
+                persona.getProductAttitudes(),     // product_attitudes
+                product.getName(),
                 product.getDescription(),
+                product.getPrice(),
+                product.getCategory(),
+                product.getKeyFeatures(),
                 task.language()
         );
 
-        // Update FeedbackResult
-        result.setFeedbackText(feedback);
+        // Parse feedback JSON response
+        JsonNode feedbackData = parseFeedbackResponse(feedbackJson);
+        validateFeedbackResponse(feedbackData);
+
+        // Extract fields from JSON
+        String feedbackText = feedbackData.get("feedback").asText();
+        Integer purchaseIntent = feedbackData.get("purchase_intent").asInt();
+        List<String> keyConcerns = extractKeyConcerns(feedbackData.get("key_concerns"));
+
+        // Update FeedbackResult with all fields
+        result.setFeedbackText(feedbackText);
+        result.setPurchaseIntent(purchaseIntent);
+        result.setKeyConcerns(keyConcerns);
         result.setStatus(FeedbackResult.FeedbackResultStatus.COMPLETED);
         feedbackResultRepository.save(result);
         log.info("Successfully generated and saved feedback result {}", result.getId());
 
         // Check and update session completion status
         checkAndUpdateSessionCompletion(result.getFeedbackSession().getId());
+    }
+
+    /**
+     * Parses feedback generation response from AI.
+     *
+     * @param feedbackJson JSON string from AI gateway
+     * @return JsonNode with parsed feedback data
+     * @throws AIGatewayException if JSON parsing fails
+     */
+    private JsonNode parseFeedbackResponse(String feedbackJson) {
+        try {
+            return objectMapper.readTree(feedbackJson);
+        } catch (Exception e) {
+            String message = "Failed to parse feedback generation response: " + e.getMessage();
+            log.error(message);
+            throw new AIGatewayException(message, ErrorCode.INVALID_JSON_RESPONSE.getCode());
+        }
+    }
+
+    /**
+     * Validates that all required fields are present in the AI feedback response JSON.
+     *
+     * Required fields:
+     * - feedback: Detailed review text in specified language
+     * - purchase_intent: Integer 1-10
+     * - key_concerns: Array of concerns/hesitations
+     *
+     * @param feedbackData JsonNode with feedback data from AI
+     * @throws AIGatewayException if any required field is missing or null
+     */
+    private void validateFeedbackResponse(JsonNode feedbackData) {
+        String[] requiredFields = {"feedback", "purchase_intent", "key_concerns"};
+
+        for (String field : requiredFields) {
+            if (!feedbackData.has(field) || feedbackData.get(field).isNull()) {
+                String message = String.format(
+                    "Missing or null required field in AI feedback response: '%s'. " +
+                    "Expected JSON structure: {\"feedback\": \"...\", \"purchase_intent\": 7, \"key_concerns\": [...]}",
+                    field
+                );
+                log.error("Feedback validation failed: {}", message);
+                throw new AIGatewayException(
+                    message,
+                    ErrorCode.INVALID_AI_RESPONSE.getCode()
+                );
+            }
+        }
+
+        // Validate purchase_intent is within range
+        int purchaseIntent = feedbackData.get("purchase_intent").asInt();
+        if (purchaseIntent < 1 || purchaseIntent > 10) {
+            String message = String.format(
+                "purchase_intent must be between 1 and 10, got: %d",
+                purchaseIntent
+            );
+            log.error("Feedback validation failed: {}", message);
+            throw new AIGatewayException(
+                message,
+                ErrorCode.INVALID_AI_RESPONSE.getCode()
+            );
+        }
+
+        // Validate key_concerns is an array
+        if (!feedbackData.get("key_concerns").isArray()) {
+            String message = "key_concerns must be an array";
+            log.error("Feedback validation failed: {}", message);
+            throw new AIGatewayException(
+                message,
+                ErrorCode.INVALID_AI_RESPONSE.getCode()
+            );
+        }
+    }
+
+    /**
+     * Extracts key concerns array from JSON node.
+     *
+     * @param keyConcernsNode JsonNode containing key_concerns array
+     * @return List of concern strings
+     */
+    private List<String> extractKeyConcerns(JsonNode keyConcernsNode) {
+        List<String> concerns = new ArrayList<>();
+        if (keyConcernsNode != null && keyConcernsNode.isArray()) {
+            for (JsonNode concernNode : keyConcernsNode) {
+                concerns.add(concernNode.asText());
+            }
+        }
+        return concerns;
     }
 
     /**
