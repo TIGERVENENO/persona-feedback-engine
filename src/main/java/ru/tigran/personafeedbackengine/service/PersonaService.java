@@ -1,5 +1,6 @@
 package ru.tigran.personafeedbackengine.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -25,7 +26,7 @@ public class PersonaService {
     private final PersonaRepository personaRepository;
     private final UserRepository userRepository;
     private final RabbitTemplate rabbitTemplate;
-    private final int maxPromptLength;
+    private final ObjectMapper objectMapper;
     private final Counter personaGenerationInitiatedCounter;
     private final Timer personaGenerationTimer;
 
@@ -33,13 +34,13 @@ public class PersonaService {
             PersonaRepository personaRepository,
             UserRepository userRepository,
             RabbitTemplate rabbitTemplate,
-            @Value("${app.feedback.max-prompt-length}") int maxPromptLength,
+            ObjectMapper objectMapper,
             MeterRegistry meterRegistry
     ) {
         this.personaRepository = personaRepository;
         this.userRepository = userRepository;
         this.rabbitTemplate = rabbitTemplate;
-        this.maxPromptLength = maxPromptLength;
+        this.objectMapper = objectMapper;
         this.personaGenerationInitiatedCounter = Counter.builder("persona.generation.initiated")
                 .description("Total personas initiated for generation")
                 .register(meterRegistry);
@@ -62,28 +63,41 @@ public class PersonaService {
     }
 
     private Long executeStartPersonaGeneration(Long userId, PersonaGenerationRequest request) {
-        log.info("Starting persona generation for user {}", userId);
-
-        if (request.prompt().length() > maxPromptLength) {
-            throw new ValidationException(
-                    "Prompt exceeds maximum length of " + maxPromptLength + " characters",
-                    ErrorCode.INVALID_PROMPT_LENGTH.getCode()
-            );
-        }
+        log.info("Starting persona generation for user {} with structured input", userId);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ValidationException("User not found", ErrorCode.USER_NOT_FOUND.getCode()));
 
+        // Serialize demographics and psychographics to JSON strings
+        String demographicsJson;
+        String psychographicsJson;
+        try {
+            demographicsJson = objectMapper.writeValueAsString(request.demographics());
+            psychographicsJson = objectMapper.writeValueAsString(request.psychographics());
+        } catch (Exception e) {
+            throw new ValidationException(
+                    "Failed to serialize persona generation request: " + e.getMessage(),
+                    ErrorCode.INVALID_REQUEST.getCode()
+            );
+        }
+
+        // Store combined JSON as generation prompt for cache key purposes
+        String generationPromptCache = demographicsJson + psychographicsJson;
+
         Persona persona = new Persona();
         persona.setUser(user);
         persona.setStatus(Persona.PersonaStatus.GENERATING);
-        persona.setGenerationPrompt(request.prompt());
-        persona.setName("Generated Persona");
+        persona.setGenerationPrompt(generationPromptCache);
+        persona.setName("Generating...");
 
         Persona savedPersona = personaRepository.save(persona);
         log.info("Created persona entity with id {}", savedPersona.getId());
 
-        PersonaGenerationTask task = new PersonaGenerationTask(savedPersona.getId(), request.prompt());
+        PersonaGenerationTask task = new PersonaGenerationTask(
+                savedPersona.getId(),
+                demographicsJson,
+                psychographicsJson
+        );
         rabbitTemplate.convertAndSend(
                 RabbitMQConfig.EXCHANGE_NAME,
                 "persona.generation",

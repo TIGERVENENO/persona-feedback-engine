@@ -39,7 +39,7 @@ public class PersonaGenerationService {
      * Processes persona generation task.
      * Generates persona details via AI and updates the Persona entity.
      *
-     * @param task Persona generation task with persona ID and user prompt
+     * @param task Persona generation task with persona ID, demographics, and psychographics
      * @throws ResourceNotFoundException if Persona not found
      */
     @Transactional
@@ -68,10 +68,11 @@ public class PersonaGenerationService {
             return;
         }
 
-        // Generate persona details via AI (cached by userId + prompt)
+        // Generate persona details via AI (cached by userId + demographics + psychographics)
         String personaDetailsJson = aiGatewayService.generatePersonaDetails(
                 persona.getUser().getId(),
-                task.userPrompt()
+                task.demographicsJson(),
+                task.psychographicsJson()
         );
 
         // Parse and validate the JSON response
@@ -105,27 +106,22 @@ public class PersonaGenerationService {
     /**
      * Validates that all required fields are present in the AI persona response JSON.
      *
-     * Required fields:
-     * - nm: Persona name
-     * - dd: Detailed description
-     * - g: Gender
-     * - ag: Age group
-     * - r: Race/ethnicity
-     *
-     * Optional field:
-     * - au: Avatar URL
+     * Required fields (new format):
+     * - name: Persona full name
+     * - detailed_bio: Detailed bio (150-200 words) about shopping habits, brand preferences, decision-making
+     * - product_attitudes: How persona evaluates and decides on products
      *
      * @param details JsonNode with persona details from AI
      * @throws AIGatewayException if any required field is missing or null
      */
     private void validatePersonaDetails(JsonNode details) {
-        String[] requiredFields = {"nm", "dd", "g", "ag", "r"};
+        String[] requiredFields = {"name", "detailed_bio", "product_attitudes"};
 
         for (String field : requiredFields) {
             if (!details.has(field) || details.get(field).isNull()) {
                 String message = String.format(
                     "Missing or null required field in AI response: '%s'. " +
-                    "Expected JSON structure: {\"nm\": \"...\", \"dd\": \"...\", \"g\": \"...\", \"ag\": \"...\", \"r\": \"...\", \"au\": \"...\"}",
+                    "Expected JSON structure: {\"name\": \"...\", \"detailed_bio\": \"...\", \"product_attitudes\": \"...\"}",
                     field
                 );
                 log.error("Persona validation failed: {}", message);
@@ -140,16 +136,21 @@ public class PersonaGenerationService {
     /**
      * Updates Persona entity with generated details from AI.
      *
+     * New format maps:
+     * - name → name
+     * - detailed_bio → detailedDescription
+     * - product_attitudes → productAttitudes
+     *
+     * Note: Gender, age, race fields are removed in new format.
+     * These are now derived from demographics in the request.
+     *
      * @param persona Persona entity to update
      * @param details JsonNode with generated details
      */
     private void updatePersonaEntity(Persona persona, JsonNode details) {
-        persona.setName(details.get("nm").asText());
-        persona.setDetailedDescription(details.get("dd").asText());
-        persona.setGender(details.get("g").asText());
-        persona.setAgeGroup(details.get("ag").asText());
-        persona.setRace(details.get("r").asText());
-        persona.setAvatarUrl(details.has("au") ? details.get("au").asText("") : "");
+        persona.setName(details.get("name").asText());
+        persona.setDetailedDescription(details.get("detailed_bio").asText());
+        persona.setProductAttitudes(details.get("product_attitudes").asText());
         persona.setStatus(Persona.PersonaStatus.ACTIVE);
     }
 }
