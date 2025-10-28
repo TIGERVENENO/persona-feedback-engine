@@ -130,32 +130,101 @@ public class AIGatewayService {
     }
 
     /**
-     * Generates feedback from a persona about a product.
+     * Generates structured feedback from a persona about a product.
      * Not cacheable as feedback is user/session-specific and volatile.
      *
-     * Expected response: plain text feedback (2-3 sentences)
+     * Expected response structure:
+     * {
+     *   "feedback": "Detailed review in specified language",
+     *   "purchase_intent": 7,  // 1-10 scale
+     *   "key_concerns": ["concern1", "concern2"]  // Array of main concerns/hesitations
+     * }
      *
-     * @param personaDescription Описание персоны
-     * @param productDescription Описание продукта
-     * @param languageCode Код языка ISO 639-1 (EN, RU, FR и т.д.)
-     * @return Текст фидбека на указанном языке
+     * @param personaBio Detailed bio of the persona (150-200 words)
+     * @param personaProductAttitudes How this persona evaluates products
+     * @param productName Product name
+     * @param productDescription Product description
+     * @param productPrice Product price (can be null)
+     * @param productCategory Product category (can be null)
+     * @param productKeyFeatures List of key product features (can be null/empty)
+     * @param languageCode Код языка ISO 639-1 (EN, RU, FR и т.д.) для feedback текста
+     * @return JSON string with feedback, purchase_intent, and key_concerns
      */
-    public String generateFeedbackForProduct(String personaDescription, String productDescription, String languageCode) {
-        log.info("Generating feedback for product in language: {}", languageCode);
+    public String generateFeedbackForProduct(
+            String personaBio,
+            String personaProductAttitudes,
+            String productName,
+            String productDescription,
+            java.math.BigDecimal productPrice,
+            String productCategory,
+            java.util.List<String> productKeyFeatures,
+            String languageCode
+    ) {
+        log.info("Generating structured feedback for product '{}' in language: {}", productName, languageCode);
+
+        // Build product details section
+        StringBuilder productDetails = new StringBuilder();
+        productDetails.append("NAME: ").append(productName).append("\n");
+        if (productDescription != null && !productDescription.isBlank()) {
+            productDetails.append("DESCRIPTION: ").append(productDescription).append("\n");
+        }
+        if (productPrice != null) {
+            productDetails.append("PRICE: $").append(productPrice).append("\n");
+        }
+        if (productCategory != null && !productCategory.isBlank()) {
+            productDetails.append("CATEGORY: ").append(productCategory).append("\n");
+        }
+        if (productKeyFeatures != null && !productKeyFeatures.isEmpty()) {
+            productDetails.append("KEY FEATURES:\n");
+            for (String feature : productKeyFeatures) {
+                productDetails.append("  - ").append(feature).append("\n");
+            }
+        }
 
         String systemPrompt = String.format("""
-                You are a realistic product reviewer embodying a specific persona.
-                Generate authentic, constructive feedback from the perspective of the given persona.
-                IMPORTANT: Respond in the language with ISO 639-1 code: %s
-                Return ONLY the feedback text (no JSON, no labels, no extra formatting).""", languageCode);
+                You are a consumer research analyst generating realistic product feedback from a specific persona's perspective.
 
-        String userMessage = String.format(
-                "Persona: %s\n\nProduct: %s\n\nProvide your honest feedback on this product:",
-                personaDescription, productDescription
+                CRITICAL INSTRUCTIONS:
+                1. Analyze the product based on persona's shopping habits, preferences, and evaluation criteria
+                2. Consider how price, category, and features align with persona's values and needs
+                3. Generate authentic feedback reflecting persona's decision-making style
+                4. Rate purchase intent (1-10) based on persona's likelihood to buy
+                5. Identify 2-4 key concerns or hesitations this persona would have
+
+                OUTPUT FORMAT (CRITICAL):
+                - Return ONLY raw JSON object - NO markdown, NO code blocks, NO backticks
+                - Start with { and end with }
+                - Do NOT wrap in ```json ```
+                - feedback field MUST be in language: %s (ISO 639-1 code)
+                - other fields (key_concerns) should remain in English for consistency
+
+                JSON structure:
+                {
+                  "feedback": "detailed product review from persona perspective (in specified language, 3-5 sentences)",
+                  "purchase_intent": 7,
+                  "key_concerns": ["concern about price", "uncertainty about feature X", "preference for competitor brand"]
+                }
+
+                Remember: feedback in %s, purchase_intent 1-10, key_concerns 2-4 items""", languageCode, languageCode);
+
+        String userMessage = String.format("""
+                PERSONA PROFILE:
+                Bio: %s
+
+                Product Evaluation Approach: %s
+
+                PRODUCT TO EVALUATE:
+                %s
+
+                Generate realistic feedback from this persona's perspective.""",
+                personaBio,
+                personaProductAttitudes,
+                productDetails.toString()
         );
 
         String response = callAIProvider(systemPrompt, userMessage);
-        return response.trim();
+        validateJSON(response);
+        return response;
     }
 
     /**
@@ -460,27 +529,97 @@ public class AIGatewayService {
     /**
      * Асинхронная версия generateFeedbackForProduct.
      *
-     * @param personaDescription Описание персоны
-     * @param productDescription Описание продукта
-     * @param languageCode Код языка ISO 639-1 (EN, RU, FR и т.д.)
-     * @return Mono с текстом обратной связи
+     * Expected response structure:
+     * {
+     *   "feedback": "Detailed review in specified language",
+     *   "purchase_intent": 7,  // 1-10 scale
+     *   "key_concerns": ["concern1", "concern2"]  // Array of main concerns/hesitations
+     * }
+     *
+     * @param personaBio Detailed bio of the persona (150-200 words)
+     * @param personaProductAttitudes How this persona evaluates products
+     * @param productName Product name
+     * @param productDescription Product description
+     * @param productPrice Product price (can be null)
+     * @param productCategory Product category (can be null)
+     * @param productKeyFeatures List of key product features (can be null/empty)
+     * @param languageCode Код языка ISO 639-1 (EN, RU, FR и т.д.) для feedback текста
+     * @return Mono с JSON строкой (feedback, purchase_intent, key_concerns)
      */
-    public Mono<String> generateFeedbackForProductAsync(String personaDescription, String productDescription, String languageCode) {
-        log.info("Generating feedback for product asynchronously in language: {}", languageCode);
+    public Mono<String> generateFeedbackForProductAsync(
+            String personaBio,
+            String personaProductAttitudes,
+            String productName,
+            String productDescription,
+            java.math.BigDecimal productPrice,
+            String productCategory,
+            java.util.List<String> productKeyFeatures,
+            String languageCode
+    ) {
+        log.info("Generating structured feedback asynchronously for product '{}' in language: {}", productName, languageCode);
+
+        // Build product details section
+        StringBuilder productDetails = new StringBuilder();
+        productDetails.append("NAME: ").append(productName).append("\n");
+        if (productDescription != null && !productDescription.isBlank()) {
+            productDetails.append("DESCRIPTION: ").append(productDescription).append("\n");
+        }
+        if (productPrice != null) {
+            productDetails.append("PRICE: $").append(productPrice).append("\n");
+        }
+        if (productCategory != null && !productCategory.isBlank()) {
+            productDetails.append("CATEGORY: ").append(productCategory).append("\n");
+        }
+        if (productKeyFeatures != null && !productKeyFeatures.isEmpty()) {
+            productDetails.append("KEY FEATURES:\n");
+            for (String feature : productKeyFeatures) {
+                productDetails.append("  - ").append(feature).append("\n");
+            }
+        }
 
         String systemPrompt = String.format("""
-                You are a realistic product reviewer embodying a specific persona.
-                Generate authentic, constructive feedback from the perspective of the given persona.
-                IMPORTANT: Respond in the language with ISO 639-1 code: %s
-                Return ONLY the feedback text (no JSON, no labels, no extra formatting).""", languageCode);
+                You are a consumer research analyst generating realistic product feedback from a specific persona's perspective.
 
-        String userMessage = String.format(
-                "Persona: %s\n\nProduct: %s\n\nProvide your honest feedback on this product:",
-                personaDescription, productDescription
+                CRITICAL INSTRUCTIONS:
+                1. Analyze the product based on persona's shopping habits, preferences, and evaluation criteria
+                2. Consider how price, category, and features align with persona's values and needs
+                3. Generate authentic feedback reflecting persona's decision-making style
+                4. Rate purchase intent (1-10) based on persona's likelihood to buy
+                5. Identify 2-4 key concerns or hesitations this persona would have
+
+                OUTPUT FORMAT (CRITICAL):
+                - Return ONLY raw JSON object - NO markdown, NO code blocks, NO backticks
+                - Start with { and end with }
+                - Do NOT wrap in ```json ```
+                - feedback field MUST be in language: %s (ISO 639-1 code)
+                - other fields (key_concerns) should remain in English for consistency
+
+                JSON structure:
+                {
+                  "feedback": "detailed product review from persona perspective (in specified language, 3-5 sentences)",
+                  "purchase_intent": 7,
+                  "key_concerns": ["concern about price", "uncertainty about feature X", "preference for competitor brand"]
+                }
+
+                Remember: feedback in %s, purchase_intent 1-10, key_concerns 2-4 items""", languageCode, languageCode);
+
+        String userMessage = String.format("""
+                PERSONA PROFILE:
+                Bio: %s
+
+                Product Evaluation Approach: %s
+
+                PRODUCT TO EVALUATE:
+                %s
+
+                Generate realistic feedback from this persona's perspective.""",
+                personaBio,
+                personaProductAttitudes,
+                productDetails.toString()
         );
 
         return callAIProviderAsync(systemPrompt, userMessage)
-                .map(String::trim)
+                .doOnNext(response -> validateJSON(response))
                 .doOnError(error -> log.error("Error during async feedback generation", error));
     }
 
