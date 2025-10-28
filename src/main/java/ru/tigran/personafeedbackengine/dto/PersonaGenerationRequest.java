@@ -1,23 +1,29 @@
 package ru.tigran.personafeedbackengine.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 
 /**
- * Request DTO for generating a new AI persona.
+ * Request DTO for generating a new AI persona using structured input.
  *
  * Triggers async persona generation workflow via RabbitMQ.
  *
- * Constraints:
- * - prompt: Required, non-blank string, 1-2000 characters
+ * Structure:
+ * - demographics: Age, gender, location, occupation, income
+ * - psychographics: Values, lifestyle, pain points
  *
  * Notes:
- * - Prompt is used as cache key, so identical prompts will reuse cached personas
+ * - Structured data used as cache key (JSON representation)
  * - Generation is async, client must poll the persona endpoint to check status
+ * - Persona bio always generated in English for consistency
  */
 public record PersonaGenerationRequest(
-        @NotBlank(message = "Prompt cannot be blank")
-        @Size(min = 1, max = 2000, message = "Prompt must be between 1 and 2000 characters")
-        String prompt
+        @NotNull(message = "Demographics cannot be null")
+        @Valid
+        PersonaDemographics demographics,
+
+        @NotNull(message = "Psychographics cannot be null")
+        @Valid
+        PersonaPsychographics psychographics
 ) {
 }
