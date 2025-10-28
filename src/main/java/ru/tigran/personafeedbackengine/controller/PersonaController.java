@@ -69,7 +69,7 @@ public class PersonaController {
     ) {
         // Extract user ID from JWT token stored in SecurityContext
         Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        log.info("POST /api/v1/personas - user: {}, prompt length: {}", userId, request.prompt().length());
+        log.info("POST /api/v1/personas - user: {}, structured persona request", userId);
 
         Long personaId = personaService.startPersonaGeneration(userId, request);
 

@@ -77,7 +77,7 @@ public class PersonaService {
         } catch (Exception e) {
             throw new ValidationException(
                     "Failed to serialize persona generation request: " + e.getMessage(),
-                    ErrorCode.INVALID_REQUEST.getCode()
+                    ErrorCode.VALIDATION_ERROR.getCode()
             );
         }
 

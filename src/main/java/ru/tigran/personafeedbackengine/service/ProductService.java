@@ -167,7 +167,10 @@ public class ProductService {
         return new ProductResponse(
                 product.getId(),
                 product.getName(),
-                product.getDescription()
+                product.getDescription(),
+                product.getPrice(),
+                product.getCategory(),
+                product.getKeyFeatures()
         );
     }
 }

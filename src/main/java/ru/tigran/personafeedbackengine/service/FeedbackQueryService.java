@@ -58,6 +58,8 @@ public class FeedbackQueryService {
                 .map(result -> new FeedbackResultDTO(
                         result.getId(),
                         result.getFeedbackText(),
+                        result.getPurchaseIntent(),
+                        result.getKeyConcerns(),
                         result.getStatus().name(),
                         result.getPersona().getId(),
                         result.getProduct().getId()
@@ -99,6 +101,8 @@ public class FeedbackQueryService {
                 .map(result -> new FeedbackResultDTO(
                         result.getId(),
                         result.getFeedbackText(),
+                        result.getPurchaseIntent(),
+                        result.getKeyConcerns(),
                         result.getStatus().name(),
                         result.getPersona().getId(),
                         result.getProduct().getId()
