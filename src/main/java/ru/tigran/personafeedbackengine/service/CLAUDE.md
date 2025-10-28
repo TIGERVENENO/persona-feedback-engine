@@ -58,15 +58,17 @@ User registration and login service with JWT token generation and BCrypt passwor
   - Cacheable (by userId + demographics + psychographics)
   - Generates detailed persona profile with consumer behavior focus
   - **Output ALWAYS in English** for consistency
-  - Returns JSON: `{name, gender, age_group, race, detailed_bio (150-200 words), product_attitudes}`
+  - Returns JSON with required and optional fields:
+    - **Required**: `name`, `detailed_bio`, `product_attitudes`
+    - **Optional**: `gender`, `age_group`, `race` (AI may not always generate these)
   - Focuses on shopping habits, brand preferences, decision-making style
   - Fields:
     - `name`: Full name matching demographics
-    - `gender`: male|female|non-binary
-    - `age_group`: 18-24|25-34|35-44|45-54|55-64|65+
-    - `race`: Asian|Caucasian|African|Hispanic|Middle Eastern|Indigenous|Mixed|Other
-    - `detailed_bio`: Comprehensive bio covering background, lifestyle, habits, preferences
+    - `detailed_bio`: Comprehensive bio (150-200 words) covering background, lifestyle, habits, preferences
     - `product_attitudes`: How persona evaluates and decides on products
+    - `gender` (optional): male|female|non-binary
+    - `age_group` (optional): 18-24|25-34|35-44|45-54|55-64|65+
+    - `race` (optional): Asian|Caucasian|African|Hispanic|Middle Eastern|Indigenous|Mixed|Other
 - `generateFeedbackForProduct(personaBio, personaProductAttitudes, productName, productDescription, productPrice, productCategory, productKeyFeatures, languageCode)`:
   - Not cached (volatile, session-specific)
   - Analyzes product based on persona's shopping habits and values
@@ -162,23 +164,21 @@ User registration and login service with JWT token generation and BCrypt passwor
 - **Responsibility**: Core persona generation business logic
 - Extracted from PersonaTaskConsumer to follow Single Responsibility Principle
 - Called by PersonaTaskConsumer to handle the actual generation workflow
+- **Flexible validation**: Validates only required fields (name, detailed_bio, product_attitudes) from AI
 - **Methods:**
   - `generatePersona(PersonaGenerationTask task)`: Orchestrates persona generation
     1. Fetch Persona entity and validate state (idempotency check)
     2. Call AIGatewayService.generatePersonaDetails(userId, demographicsJson, psychographicsJson)
-    3. Parse and validate JSON response
-    4. Update Persona entity with generated details (name, gender, ageGroup, race, detailedDescription, productAttitudes)
+    3. Parse and validate JSON response (checks only required fields)
+    4. Update Persona entity with generated details (name, detailed_bio, product_attitudes; optional: gender, ageGroup, race)
     5. Persist changes to database
+    6. Log AI response for debugging
 - **Private methods:**
   - `parsePersonaDetails(String json)`: Parses JSON response from AI
-  - `validatePersonaDetails(JsonNode details)`: Validates required fields (name, gender, age_group, race, detailed_bio, product_attitudes)
+  - `validatePersonaDetails(JsonNode details)`: Validates only required fields: name, detailed_bio, product_attitudes
   - `updatePersonaEntity(Persona persona, JsonNode details)`: Maps JSON fields to entity properties
-    - name → name
-    - gender → gender
-    - age_group → ageGroup
-    - race → race
-    - detailed_bio → detailedDescription
-    - product_attitudes → productAttitudes
+    - Required: name → name, detailed_bio → detailedDescription, product_attitudes → productAttitudes
+    - Optional: gender → gender, age_group → ageGroup, race → race (only set if present in AI response)
 
 ### FeedbackGenerationService
 - **Responsibility**: Core feedback generation business logic, session completion, and insights aggregation
