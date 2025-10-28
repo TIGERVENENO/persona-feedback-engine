@@ -34,7 +34,9 @@ JPA entities and domain models for the persona feedback engine.
   - `deleted: Boolean` - Soft delete flag (default: false)
   - `user: User` - Owner of the product (required)
 - **JSONB Handling**: keyFeatures stored as JSONB in PostgreSQL
+  - Uses @JdbcTypeCode(SqlTypes.JSON) annotation to explicitly declare JSON SQL type to Hibernate
   - Uses AttributeConverter (JsonbConverter) for List<String> ↔ JSON conversion
+  - Converts List<String> to JSON string for database storage, and vice versa on retrieval
 
 ### Persona
 - AI-generated character profiles for realistic feedback simulation
