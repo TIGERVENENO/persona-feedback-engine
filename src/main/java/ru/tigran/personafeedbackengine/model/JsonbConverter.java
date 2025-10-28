@@ -12,6 +12,7 @@ import java.util.List;
 /**
  * JPA конвертер для работы с JSONB типом PostgreSQL.
  * Конвертирует List<String> в JSON строку и обратно.
+ * PostgreSQL автоматически приведёт строку к JSONB типу при вставке.
  */
 @Slf4j
 @Converter
