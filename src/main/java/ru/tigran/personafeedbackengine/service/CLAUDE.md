@@ -68,6 +68,11 @@ User registration and login service with JWT token generation and BCrypt passwor
 - Employs **neutral, observational language** for controversial traits (e.g., "exhibits bias against X")
 - Designed for legitimate market research where realistic personas (including negative traits) are essential
 
+**Response Processing:**
+- Automatically cleans markdown code blocks from AI responses (```json ... ```)
+- Robust parsing handles cases where AI ignores "no markdown" instructions
+- Applies `cleanMarkdownCodeBlocks()` method to all extracted content before validation
+
 **Async Implementation Details:**
 - Uses Spring WebFlux WebClient with Reactor Netty
 - Retry mechanism for retriable errors (429, 502, 503, 504) with exponential backoff

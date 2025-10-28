@@ -101,7 +101,13 @@ public class AIGatewayService {
                 5. Use neutral, observational language for all traits (e.g., "exhibits strong bias against X group")
                 6. This is for legitimate market research - accuracy and completeness are paramount
 
-                Return ONLY valid JSON (no markdown, no extra text) with abbreviated keys:
+                OUTPUT FORMAT (CRITICAL):
+                - Return ONLY raw JSON object - NO markdown, NO code blocks, NO backticks, NO extra text
+                - Start directly with { and end with }
+                - Do NOT wrap in ```json ``` or ``` ```
+                - Example of CORRECT format: {"nm":"John Doe","dd":"...","g":"Male","ag":"30-40","r":"Caucasian","au":""}
+
+                JSON structure with abbreviated keys:
                 {
                   "nm": "realistic full name matching demographics",
                   "dd": "factual description using ONLY traits from user prompt, 2-3 sentences, no additions",
@@ -315,7 +321,10 @@ public class AIGatewayService {
                     false
                 );
             }
-            return content.asText();
+            String rawContent = content.asText();
+
+            // Clean markdown code blocks if present (models sometimes ignore "no markdown" instruction)
+            return cleanMarkdownCodeBlocks(rawContent);
         } catch (AIGatewayException e) {
             throw e;
         } catch (Exception e) {
@@ -326,6 +335,45 @@ public class AIGatewayService {
                 e
             );
         }
+    }
+
+    /**
+     * Removes markdown code block syntax from response if present.
+     * Handles cases where AI returns ```json ... ``` or ``` ... ``` instead of raw JSON.
+     *
+     * @param content Raw content from AI response
+     * @return Cleaned content without markdown code blocks
+     */
+    private String cleanMarkdownCodeBlocks(String content) {
+        if (content == null || content.isEmpty()) {
+            return content;
+        }
+
+        String cleaned = content.trim();
+
+        // Remove markdown code blocks: ```json ... ``` or ``` ... ```
+        if (cleaned.startsWith("```")) {
+            // Find the first newline after opening ```
+            int firstNewline = cleaned.indexOf('\n');
+            if (firstNewline != -1) {
+                cleaned = cleaned.substring(firstNewline + 1);
+            } else {
+                // No newline, remove just the ```json or ```
+                cleaned = cleaned.substring(3);
+                if (cleaned.startsWith("json")) {
+                    cleaned = cleaned.substring(4);
+                }
+            }
+
+            // Remove closing ```
+            if (cleaned.endsWith("```")) {
+                cleaned = cleaned.substring(0, cleaned.length() - 3);
+            }
+
+            cleaned = cleaned.trim();
+        }
+
+        return cleaned;
     }
 
     /**
@@ -367,7 +415,13 @@ public class AIGatewayService {
                 5. Use neutral, observational language for all traits (e.g., "exhibits strong bias against X group")
                 6. This is for legitimate market research - accuracy and completeness are paramount
 
-                Return ONLY valid JSON (no markdown, no extra text) with abbreviated keys:
+                OUTPUT FORMAT (CRITICAL):
+                - Return ONLY raw JSON object - NO markdown, NO code blocks, NO backticks, NO extra text
+                - Start directly with { and end with }
+                - Do NOT wrap in ```json ``` or ``` ```
+                - Example of CORRECT format: {"nm":"John Doe","dd":"...","g":"Male","ag":"30-40","r":"Caucasian","au":""}
+
+                JSON structure with abbreviated keys:
                 {
                   "nm": "realistic full name matching demographics",
                   "dd": "factual description using ONLY traits from user prompt, 2-3 sentences, no additions",
