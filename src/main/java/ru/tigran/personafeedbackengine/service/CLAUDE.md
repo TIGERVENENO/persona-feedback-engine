@@ -65,6 +65,11 @@ User registration and login service with JWT token generation and BCrypt passwor
   - Analyzes product based on persona's shopping habits and values
   - Returns structured JSON: `{feedback (in languageCode), purchase_intent (1-10), key_concerns (array)}`
   - Language code is ISO 639-1 format (EN, RU, FR, etc.)
+- `aggregateKeyThemes(List<String> allConcerns)`:
+  - Groups similar concerns from all feedback results into key themes
+  - Uses AI to identify patterns and count mentions
+  - Returns JSON array: `[{"theme": "...", "mentions": N}, ...]`
+  - Returns top 5-7 most important themes
 
 **Asynchronous Methods (non-blocking, returns Mono):**
 - `generatePersonaDetailsAsync(Long userId, String demographicsJson, String psychographicsJson)`:
@@ -92,7 +97,22 @@ User registration and login service with JWT token generation and BCrypt passwor
   - Creates Persona entity (state: GENERATING)
   - Publishes PersonaGenerationTask to queue with demographicsJson and psychographicsJson
   - Stores combined JSON as generationPrompt for cache key purposes
+- `findOrCreatePersonas(Long userId, List<PersonaVariation> variations) -> List<Long>`:
+  - Finds existing or creates new personas based on demographics
+  - For each variation: searches DB by demographics (gender, age, region, incomeLevel)
+  - If found ACTIVE persona - reuses it
+  - If not found - creates new persona and triggers AI generation
+  - Returns list of persona IDs (mix of existing and newly created)
 - Validates user existence
+
+### PersonaVariationService
+- Generates demographic variations from target audience parameters
+- `generateVariations(TargetAudience targetAudience, int personaCount) -> List<PersonaVariation>`:
+  - Takes structured demographics (genders, ageRanges, regions, incomes)
+  - Generates N specific persona variations using round-robin distribution
+  - Converts age ranges to specific ages (e.g., "25-35" -> random age 25-35)
+  - Supports formats: "18-25", "26-35", "36-45", "46+"
+  - Returns list of PersonaVariation with specific demographics for each persona
 
 ### ProductService
 - CRUD operations for products with user ownership validation
@@ -106,9 +126,18 @@ User registration and login service with JWT token generation and BCrypt passwor
 - Throws ValidationException if product not found or access denied
 
 ### FeedbackService
-- Entry point for feedback session workflow
-- `startFeedbackSession(FeedbackSessionRequest request)`: Creates FeedbackSession + FeedbackResult entities and publishes FeedbackGenerationTasks
+- Entry point for feedback session workflow with two operating modes
+- `startFeedbackSession(Long userId, FeedbackSessionRequest request) -> Long`:
+  - **Mode 1 (Explicit personas)**: Uses provided personaIds list
+  - **Mode 2 (Auto-generate)**: Uses targetAudience + personaCount
+    - Calls PersonaVariationService to generate variations
+    - Calls PersonaService.findOrCreatePersonas to get/create personas
+    - Waits for newly created personas to become ACTIVE (polling, 60s timeout)
+  - Creates FeedbackSession + FeedbackResult entities for all product-persona pairs
+  - Publishes FeedbackGenerationTasks to queue
+  - Returns session ID
 - Validates request ownership, product/persona existence, and constraints
+- `waitForPersonasReady(userId, personaIds, timeoutSec)`: Polls persona status until all ACTIVE
 
 ### IdempotencyService
 - Protects against duplicate requests using idempotency keys
@@ -142,7 +171,7 @@ User registration and login service with JWT token generation and BCrypt passwor
     - product_attitudes → productAttitudes
 
 ### FeedbackGenerationService
-- **Responsibility**: Core feedback generation business logic and session completion
+- **Responsibility**: Core feedback generation business logic, session completion, and insights aggregation
 - Extracted from FeedbackTaskConsumer to follow Single Responsibility Principle
 - Called by FeedbackTaskConsumer to handle the actual generation workflow
 - Uses Redisson distributed locking for safe session status updates across instances
@@ -163,8 +192,16 @@ User registration and login service with JWT token generation and BCrypt passwor
   - `checkAndUpdateSessionCompletion(Long sessionId)`: Atomically updates session status
     - Uses distributed lock (Redisson) with 10-second timeout
     - Checks if all results for session are done (completed + failed >= total)
-    - Updates session status to COMPLETED if all results done
+    - **When session complete**: calls aggregateSessionInsights and saves to session
+    - Updates session status to COMPLETED
     - Handles InterruptedException and general exceptions
+  - `aggregateSessionInsights(Long sessionId) -> String`: Generates aggregated insights
+    - Loads all COMPLETED feedback results
+    - Calculates averageScore (mean purchase_intent)
+    - Calculates purchaseIntentPercent (% with intent >= 7)
+    - Collects all keyConcerns from all results
+    - Calls AIGatewayService.aggregateKeyThemes to group themes
+    - Returns AggregatedInsights as JSON string
 - **Private methods:**
   - `parseFeedbackResponse(String json)`: Parses JSON response from AI
   - `validateFeedbackResponse(JsonNode data)`: Validates required fields (feedback, purchase_intent, key_concerns)

@@ -30,9 +30,47 @@ Structured persona generation request with demographics and psychographics.
 - `keyFeatures: List<String>` - List of key product features (optional)
 
 ### FeedbackSessionRequest
-- `productIds: List<Long>` - Products to get feedback on (max 5)
-- `personaIds: List<Long>` - Personas to generate feedback from (max 5)
-- `language: String` - ISO 639-1 language code (EN, RU, FR, etc.) - required, validated against ISO standard
+Request for creating feedback session with two operating modes.
+
+**Mode 1 - Explicit personas (old approach, backward compatible)**:
+- `productIds: List<Long>` - Products to get feedback on (max 5, required)
+- `personaIds: List<Long>` - Explicitly specified personas (1-5, optional)
+- `language: String` - ISO 639-1 language code (EN, RU, FR, etc.) - required
+
+**Mode 2 - Auto-generate personas (new bulk approach)**:
+- `productIds: List<Long>` - Products to get feedback on (max 5, required)
+- `targetAudience: TargetAudience` - Demographics for auto-generation (optional)
+- `personaCount: Integer` - Number of personas to generate (3-7, default: 5, optional)
+- `language: String` - ISO 639-1 language code (EN, RU, FR, etc.) - required
+
+**Validation**: Exactly one mode must be used - either personaIds OR targetAudience must be provided, not both
+
+### TargetAudience
+Structured demographics for bulk persona generation.
+
+- `genders: List<String>` - List of genders (["male", "female", "other"], 1-3 elements, required)
+- `ageRanges: List<String>` - Age ranges (["18-25", "26-35", "36-45", "46+"], 1-4 elements, required)
+- `regions: List<String>` - Regions (["moscow", "spb", "regions"], 1-3 elements, required)
+- `incomes: List<String>` - Income levels (["low", "medium", "high"], 1-3 elements, required)
+
+### PersonaVariation
+Internal DTO for specific persona demographics combination.
+
+- `gender: String` - Specific gender ("male", "female", "other")
+- `age: Integer` - Exact age (e.g., 27, 34)
+- `region: String` - Specific region ("moscow", "spb", "regions")
+- `incomeLevel: String` - Income level ("low", "medium", "high")
+
+### AggregatedInsights
+AI-aggregated insights from completed feedback session.
+
+- `averageScore: Double` - Average purchase intent (1-10)
+- `purchaseIntentPercent: Integer` - Percentage of personas with purchaseIntent >= 7
+- `keyThemes: List<KeyTheme>` - Main grouped themes from all feedback
+
+**KeyTheme nested record**:
+- `theme: String` - Theme description (e.g., "Price concerns")
+- `mentions: Integer` - How many personas mentioned this theme
 
 ## API Response DTOs
 
@@ -64,6 +102,7 @@ Note: Personas are ALWAYS generated in English for consistency, regardless of in
 - `language: String` - ISO 639-1 language code used for feedback generation
 - `createdAt: LocalDateTime`
 - `feedbackResults: List<FeedbackResultDTO>`
+- `aggregatedInsights: AggregatedInsights` (nullable) - AI-aggregated insights, null if session not completed
 - `pageNumber: Integer` (nullable) - 0-based page number when paginated, null if all results
 - `pageSize: Integer` (nullable) - page size when paginated, null if all results
 - `totalCount: Long` (nullable) - total count of feedback results, null if all results returned
