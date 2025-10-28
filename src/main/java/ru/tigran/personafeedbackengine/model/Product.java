@@ -29,6 +29,16 @@ public class Product extends AuditableEntity {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(precision = 10, scale = 2)
+    private java.math.BigDecimal price;
+
+    @Column(length = 100)
+    private String category;
+
+    @Column(columnDefinition = "JSONB")
+    @Convert(converter = JsonbConverter.class)
+    private java.util.List<String> keyFeatures;
+
     // Soft delete: помечает удаленные продукты, но сохраняет feedback историю
     @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
     private Boolean deleted = false;

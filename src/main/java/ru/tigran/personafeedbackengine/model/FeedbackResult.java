@@ -28,6 +28,13 @@ public class FeedbackResult extends AuditableEntity {
     @Column(columnDefinition = "TEXT")
     private String feedbackText;
 
+    @Column
+    private Integer purchaseIntent;
+
+    @Column(columnDefinition = "JSONB")
+    @Convert(converter = JsonbConverter.class)
+    private java.util.List<String> keyConcerns;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private FeedbackResultStatus status;

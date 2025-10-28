@@ -38,6 +38,9 @@ public class Persona extends AuditableEntity {
 
     private String avatarUrl;
 
+    @Column(columnDefinition = "TEXT")
+    private String productAttitudes;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PersonaStatus status;
