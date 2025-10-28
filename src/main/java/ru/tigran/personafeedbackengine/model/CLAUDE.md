@@ -28,12 +28,12 @@ JPA entities and domain models for the persona feedback engine.
   - `name: String` - Product name (required, 1-200 chars)
   - `description: String` - Product description (optional, max 5000 chars)
   - `price: BigDecimal` - Product price (optional)
+  - `currency: String` - ISO 4217 currency code (optional, 3 chars: USD, RUB, EUR, etc.)
   - `category: String` - Product category (optional, max 100 chars)
   - `keyFeatures: List<String>` - Key product features stored as JSONB (optional)
   - `deleted: Boolean` - Soft delete flag (default: false)
   - `user: User` - Owner of the product (required)
 - **JSONB Handling**: keyFeatures stored as JSONB in PostgreSQL
-  - Uses custom Hibernate UserType (JsonbStringType) for proper JSONB type handling
   - Uses AttributeConverter (JsonbConverter) for List<String> ↔ JSON conversion
 
 ### Persona
@@ -64,22 +64,13 @@ JPA entities and domain models for the persona feedback engine.
 
 ## Utility Classes
 
-### JsonbStringType
-- Custom Hibernate 6 UserType for PostgreSQL JSONB type handling
-- **Problem it solves**: PostgreSQL JSONB type casting error (VARCHAR vs JSONB type mismatch)
-- **How it works**:
-  - Tells Hibernate to use `Types.OTHER` for JSONB columns
-  - Properly marshalls Java String ↔ PostgreSQL JSONB in prepared statements
-  - Handles null values gracefully
-- Used by: Product.keyFeatures field
-
 ### JsonbConverter
 - JPA AttributeConverter for List<String> ↔ JSON string conversion
 - **Functionality**:
   - `convertToDatabaseColumn()`: List<String> → JSON string
   - `convertToEntityAttribute()`: JSON string → List<String>
   - Uses Jackson ObjectMapper for serialization
-- Works in tandem with JsonbStringType for complete JSONB support
+- Used by: Product.keyFeatures field for JSONB handling
 
 ## Relationships
 - User 1:N Product

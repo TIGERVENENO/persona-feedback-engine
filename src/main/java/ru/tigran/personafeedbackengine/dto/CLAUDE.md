@@ -26,6 +26,7 @@ Structured persona generation request with demographics and psychographics.
 - `name: String` - Product name (required, 1-200 chars)
 - `description: String` - Product description (optional, max 5000 chars)
 - `price: BigDecimal` - Product price (optional, minimum 0.00)
+- `currency: String` - ISO 4217 currency code (optional, exactly 3 chars: "USD", "RUB", "EUR", etc.)
 - `category: String` - Product category (optional, max 100 chars)
 - `keyFeatures: List<String>` - List of key product features (optional)
 
@@ -93,6 +94,7 @@ Note: Personas are ALWAYS generated in English for consistency, regardless of in
 - `name: String`
 - `description: String`
 - `price: BigDecimal` - Product price
+- `currency: String` - ISO 4217 currency code
 - `category: String` - Product category
 - `keyFeatures: List<String>` - List of key product features
 
