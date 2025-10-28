@@ -31,6 +31,9 @@ public record ProductRequest(
         @Size(max = 100, message = "Категория не должна превышать 100 символов")
         String category,
 
-        List<String> keyFeatures
+        @Size(max = 50, message = "Максимум 50 характеристик")
+        List<@NotBlank(message = "Характеристика не может быть пустой")
+        @Size(max = 200, message = "Характеристика не должна превышать 200 символов")
+                String> keyFeatures
 ) {
 }
