@@ -91,11 +91,31 @@ public class PersonaService {
         // Store combined JSON as generation prompt for cache key purposes
         String generationPromptCache = demographicsJson + psychographicsJson;
 
+        // Извлекаем демографические поля для заполнения в Persona entity
+        PersonaDemographics demographics = request.demographics();
+
         Persona persona = new Persona();
         persona.setUser(user);
         persona.setStatus(Persona.PersonaStatus.GENERATING);
         persona.setGenerationPrompt(generationPromptCache);
         persona.setName("Generating...");
+
+        // Заполняем демографические поля для индексирования и поиска в БД
+        if (demographics != null) {
+            persona.setDemographicGender(demographics.gender());
+            if (demographics.age() != null) {
+                try {
+                    persona.setAge(Integer.parseInt(demographics.age()));
+                } catch (NumberFormatException e) {
+                    log.warn("Could not parse age as integer: {}", demographics.age());
+                }
+            }
+            persona.setRegion(demographics.location());  // location → region в Persona
+            persona.setIncomeLevel(demographics.income());
+        }
+
+        // Заполняем demographics_hash JSON для быстрого поиска/кеширования
+        persona.setDemographicsHash(demographicsJson);
 
         Persona savedPersona = personaRepository.save(persona);
         log.info("Created persona entity with id {}", savedPersona.getId());
