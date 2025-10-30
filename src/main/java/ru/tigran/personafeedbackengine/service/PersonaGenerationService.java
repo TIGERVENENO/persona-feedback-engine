@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import ru.tigran.personafeedbackengine.dto.PersonaGenerationTask;
 import ru.tigran.personafeedbackengine.exception.AIGatewayException;
 import ru.tigran.personafeedbackengine.exception.ErrorCode;
@@ -39,6 +40,9 @@ public class PersonaGenerationService {
      * Processes persona generation task.
      * Generates persona details via AI and updates the Persona entity.
      *
+     * Uses generationInProgress flag to prevent concurrent processing from multiple RabbitMQ consumer threads.
+     * This avoids optimistic locking (version) conflicts when multiple threads try to update the same persona.
+     *
      * @param task Persona generation task with persona ID, demographics, and psychographics
      * @throws ResourceNotFoundException if Persona not found
      */
@@ -59,6 +63,12 @@ public class PersonaGenerationService {
             return;
         }
 
+        // Check if another consumer thread is already processing this persona
+        if (persona.getGenerationInProgress()) {
+            log.warn("Persona {} is already being processed by another thread, skipping", persona.getId());
+            return;
+        }
+
         if (persona.getStatus() == Persona.PersonaStatus.FAILED) {
             log.warn("Persona {} previously failed, retrying", persona.getId());
         }
@@ -68,23 +78,33 @@ public class PersonaGenerationService {
             return;
         }
 
-        // Generate persona details via AI (cached by userId + demographics + psychographics)
-        String personaDetailsJson = aiGatewayService.generatePersonaDetails(
-                persona.getUser().getId(),
-                task.demographicsJson(),
-                task.psychographicsJson()
-        );
+        // Set flag to prevent concurrent processing from other consumer threads
+        // Uses separate transaction (REQUIRES_NEW) to ensure flag is committed immediately
+        markGenerationInProgress(task.personaId());
 
-        // Parse and validate the JSON response
-        JsonNode details = parsePersonaDetails(personaDetailsJson);
-        log.info("AI persona response for persona {}: {}", persona.getId(), personaDetailsJson);
-        validatePersonaDetails(details);
+        try {
+            // Generate persona details via AI (cached by userId + demographics + psychographics)
+            String personaDetailsJson = aiGatewayService.generatePersonaDetails(
+                    persona.getUser().getId(),
+                    task.demographicsJson(),
+                    task.psychographicsJson()
+            );
 
-        // Update Persona entity with generated details
-        updatePersonaEntity(persona, details);
+            // Parse and validate the JSON response
+            JsonNode details = parsePersonaDetails(personaDetailsJson);
+            log.info("AI persona response for persona {}: {}", persona.getId(), personaDetailsJson);
+            validatePersonaDetails(details);
 
-        personaRepository.save(persona);
-        log.info("Successfully generated and saved persona {}", persona.getId());
+            // Update Persona entity with generated details
+            updatePersonaEntity(persona, details);
+
+            personaRepository.save(persona);
+            log.info("Successfully generated and saved persona {}", persona.getId());
+        } finally {
+            // Always clear the flag, even if generation fails
+            // Uses separate transaction (REQUIRES_NEW) so it commits regardless of parent transaction status
+            clearGenerationInProgress(task.personaId());
+        }
     }
 
     /**
@@ -172,5 +192,44 @@ public class PersonaGenerationService {
         }
 
         persona.setStatus(Persona.PersonaStatus.ACTIVE);
+    }
+
+    /**
+     * Marks persona generation as in progress in a separate transaction.
+     * Uses REQUIRES_NEW to ensure the flag change is committed immediately,
+     * even if the parent transaction is rolled back.
+     *
+     * @param personaId ID of persona to mark
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markGenerationInProgress(Long personaId) {
+        Persona persona = personaRepository.findById(personaId).orElse(null);
+        if (persona != null) {
+            persona.setGenerationInProgress(true);
+            personaRepository.save(persona);
+            log.debug("Marked persona {} as generation in progress", personaId);
+        }
+    }
+
+    /**
+     * Clears persona generation flag in a separate transaction.
+     * Uses REQUIRES_NEW to ensure the flag is always cleared,
+     * regardless of whether the parent transaction succeeds or rolls back.
+     *
+     * @param personaId ID of persona to clear flag for
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void clearGenerationInProgress(Long personaId) {
+        try {
+            Persona persona = personaRepository.findById(personaId).orElse(null);
+            if (persona != null) {
+                persona.setGenerationInProgress(false);
+                personaRepository.save(persona);
+                log.debug("Cleared generation in progress flag for persona {}", personaId);
+            }
+        } catch (Exception e) {
+            log.error("Failed to clear generation flag for persona {}", personaId, e);
+            // Don't throw - we want to ensure this doesn't break the consumer processing
+        }
     }
 }

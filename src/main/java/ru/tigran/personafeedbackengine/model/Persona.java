@@ -102,6 +102,10 @@ public class Persona extends AuditableEntity {
     @Column(columnDefinition = "TEXT")
     private String generationPrompt;
 
+    // Prevents concurrent updates from multiple consumer threads (async race condition prevention)
+    @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private Boolean generationInProgress = false;
+
     // Soft delete: помечает удаленные персоны, но сохраняет feedback историю
     @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
     private Boolean deleted = false;

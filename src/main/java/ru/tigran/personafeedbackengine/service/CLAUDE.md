@@ -161,18 +161,27 @@ User registration and login service with JWT token generation and BCrypt passwor
 - Useful for complex multi-step operations where atomicity across services is needed
 
 ### PersonaGenerationService
-- **Responsibility**: Core persona generation business logic
+- **Responsibility**: Core persona generation business logic with race condition prevention
 - Extracted from PersonaTaskConsumer to follow Single Responsibility Principle
 - Called by PersonaTaskConsumer to handle the actual generation workflow
 - **Flexible validation**: Validates only required fields (name, detailed_bio, product_attitudes) from AI
+- **Race condition fix (CRITICAL-3)**: Prevents concurrent updates from multiple RabbitMQ consumer threads
+  - Uses `generationInProgress` boolean flag on Persona entity
+  - Flag is set/cleared in separate transactions (REQUIRES_NEW propagation) to prevent optimistic locking conflicts
+  - When multiple consumers pick up the same persona task, only the first one processes it; others skip
+  - This prevents `StaleObjectStateException` caused by version conflicts when multiple threads update same entity
 - **Methods:**
-  - `generatePersona(PersonaGenerationTask task)`: Orchestrates persona generation
+  - `generatePersona(PersonaGenerationTask task)`: Orchestrates persona generation with race condition prevention
     1. Fetch Persona entity and validate state (idempotency check)
-    2. Call AIGatewayService.generatePersonaDetails(userId, demographicsJson, psychographicsJson)
-    3. Parse and validate JSON response (checks only required fields)
-    4. Update Persona entity with generated details (name, detailed_bio, product_attitudes; optional: gender, ageGroup, race)
-    5. Persist changes to database
-    6. Log AI response for debugging
+    2. Check if `generationInProgress` flag is set; skip if true (another thread is processing)
+    3. Mark persona as `generationInProgress = true` in separate transaction
+    4. Call AIGatewayService.generatePersonaDetails(userId, demographicsJson, psychographicsJson)
+    5. Parse and validate JSON response (checks only required fields)
+    6. Update Persona entity with generated details (name, detailed_bio, product_attitudes; optional: gender, ageGroup, race)
+    7. Persist changes to database
+    8. Clear `generationInProgress = false` in finally block (separate transaction, always executes)
+  - `markGenerationInProgress(Long personaId)`: Sets flag in separate transaction (REQUIRES_NEW)
+  - `clearGenerationInProgress(Long personaId)`: Clears flag in separate transaction (REQUIRES_NEW), logs errors but doesn't throw
 - **Private methods:**
   - `parsePersonaDetails(String json)`: Parses JSON response from AI
   - `validatePersonaDetails(JsonNode details)`: Validates only required fields: name, detailed_bio, product_attitudes
