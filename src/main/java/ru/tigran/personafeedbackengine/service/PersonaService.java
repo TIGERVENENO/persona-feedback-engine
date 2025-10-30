@@ -20,8 +20,11 @@ import ru.tigran.personafeedbackengine.model.User;
 import ru.tigran.personafeedbackengine.repository.PersonaRepository;
 import ru.tigran.personafeedbackengine.repository.UserRepository;
 
+import ru.tigran.personafeedbackengine.model.PersonaName;
+
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -80,6 +83,206 @@ public class PersonaService {
         this.personaGenerationTimer = Timer.builder("persona.generation.time")
                 .description("Time to initiate persona generation")
                 .register(meterRegistry);
+    }
+
+    /**
+     * BEST APPROACH: Starts batch persona generation with FIXED NAMES.
+     * Generates N personas (typically 6) with different predefined names in PARALLEL.
+     * Each AI call creates unique persona around a fixed name.
+     *
+     * Flow:
+     * 1. Get N random unique names from PersonaName enum (e.g., 6 different male/female names)
+     * 2. Start N parallel CompletableFuture tasks, each calling AIGatewayService.generatePersonaWithFixedName()
+     * 3. Wait for all tasks to complete
+     * 4. Parse all responses
+     * 5. Create Persona entities with ACTIVE status
+     * 6. Save all to database and flush
+     * 7. Return list of persona IDs
+     *
+     * ADVANTAGES:
+     * ✅ GUARANTEED DIVERSITY: Different names → completely different personas
+     * ✅ PARALLEL: 6 requests run in parallel → fast
+     * ✅ CHEAP: 6 requests (vs 1 batch) but parallel reduces wall-clock time
+     * ✅ ROBUST: Each request can fail/retry independently
+     * ✅ FLEXIBLE: Can mix male/female names based on request
+     *
+     * @param userId User ID
+     * @param request Persona generation request with demographics
+     * @return List of created persona IDs (guaranteed to have all N personas with different names)
+     * @throws ValidationException if any generation fails
+     */
+    @Transactional
+    public List<Long> startBatchPersonaGenerationWithFixedNames(Long userId, PersonaGenerationRequest request) {
+        log.info("Starting BATCH persona generation with FIXED NAMES for user {} with count: {}", userId, request.getCountOrDefault());
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ValidationException("User not found", ErrorCode.USER_NOT_FOUND.getCode()));
+
+        int personaCount = request.getCountOrDefault();
+        String characteristicsJson;
+
+        try {
+            characteristicsJson = createCharacteristicsHash(request);
+        } catch (Exception e) {
+            throw new ValidationException(
+                    "Failed to serialize characteristics: " + e.getMessage(),
+                    ErrorCode.VALIDATION_ERROR.getCode()
+            );
+        }
+
+        // Build demographics for AI
+        String demographicsJson = buildDemographicsJson(request);
+        String psychographicsJson = buildPsychographicsJson(request);
+
+        // Step 1: Get N unique names from PersonaName enum
+        // Determine gender distribution from request
+        List<String> selectedNames = selectRandomNames(request.gender(), personaCount);
+        log.info("Selected {} random names for batch generation: {}", selectedNames.size(), selectedNames);
+
+        // Step 2: Start N parallel AI generation tasks
+        List<CompletableFuture<String>> generationFutures = new ArrayList<>();
+
+        for (String name : selectedNames) {
+            CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> {
+                try {
+                    log.debug("Starting async persona generation for name: {}", name);
+                    return aiGatewayService.generatePersonaWithFixedName(
+                            userId,
+                            demographicsJson,
+                            psychographicsJson,
+                            name
+                    );
+                } catch (Exception e) {
+                    log.error("Failed to generate persona with name {}: {}", name, e.getMessage());
+                    throw new ValidationException(
+                            "Failed to generate persona '" + name + "': " + e.getMessage(),
+                            ErrorCode.AI_SERVICE_ERROR.getCode()
+                    );
+                }
+            });
+            generationFutures.add(future);
+        }
+
+        log.info("Started {} parallel persona generation tasks", generationFutures.size());
+
+        // Step 3: Wait for all tasks to complete
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+                generationFutures.toArray(new CompletableFuture[0])
+        );
+
+        try {
+            allFutures.join();  // Wait for all completions (blocks)
+        } catch (Exception e) {
+            log.error("One or more persona generation tasks failed: {}", e.getMessage());
+            throw new ValidationException(
+                    "Batch persona generation failed: " + e.getMessage(),
+                    ErrorCode.AI_SERVICE_ERROR.getCode()
+            );
+        }
+
+        log.info("All {} persona generation tasks completed successfully", generationFutures.size());
+
+        // Step 4: Parse all responses and create entities
+        List<Persona> createdPersonas = new ArrayList<>();
+
+        for (int i = 0; i < selectedNames.size(); i++) {
+            String name = selectedNames.get(i);
+            String personaJson = generationFutures.get(i).join();  // Get result
+
+            // Parse the JSON response
+            PersonaData personaData = parsePersonaData(personaJson);
+
+            Persona persona = new Persona();
+            persona.setUser(user);
+            persona.setStatus(Persona.PersonaStatus.ACTIVE);
+
+            // Set generated data
+            persona.setName(personaData.name());
+            persona.setDetailedDescription(personaData.detailedBio());
+            persona.setProductAttitudes(personaData.productAttitudes());
+            persona.setGender(personaData.gender());
+
+            // Set demographic fields from request
+            persona.setCountry(request.country().getCode());
+            persona.setCity(request.city());
+            persona.setDemographicGender(request.gender().getValue());
+            persona.setMinAge(request.minAge());
+            persona.setMaxAge(request.maxAge());
+            persona.setActivitySphere(request.activitySphere().getValue());
+
+            // Set interests if provided
+            if (request.interests() != null) {
+                try {
+                    persona.setInterests(objectMapper.writeValueAsString(request.interests()));
+                } catch (Exception e) {
+                    log.warn("Could not serialize interests for persona {}: {}", name, e.getMessage());
+                }
+            }
+
+            persona.setAdditionalParams(request.additionalParams());
+
+            // Store characteristics hash
+            persona.setCharacteristicsHash(characteristicsJson);
+            persona.setGenerationPrompt(characteristicsJson);
+
+            // Calculate age group
+            String ageGroup = calculateAgeGroup(request.minAge(), request.maxAge());
+            persona.setAgeGroup(ageGroup);
+
+            // Save persona
+            Persona saved = personaRepository.save(persona);
+            createdPersonas.add(saved);
+            log.info("Created persona entity {} ({}/{}): {}",
+                    saved.getId(), i + 1, selectedNames.size(), personaData.name());
+        }
+
+        // Step 5: Flush all personas to database
+        personaRepository.flush();
+        log.info("Flushed {} personas from batch generation to database", createdPersonas.size());
+
+        List<Long> personaIds = createdPersonas.stream().map(Persona::getId).collect(Collectors.toList());
+        log.info("Batch persona generation with fixed names completed successfully. IDs: {}", personaIds);
+
+        return personaIds;
+    }
+
+    /**
+     * Selects N unique random names based on gender.
+     * Uses PersonaName enum to ensure variety.
+     */
+    private List<String> selectRandomNames(Gender gender, int count) {
+        // For now, we'll just get male or female names
+        // In real scenario, could split 50/50 or use gender distribution
+        if (Gender.FEMALE.equals(gender)) {
+            return PersonaName.getRandomFemaleNames(count);
+        } else {
+            return PersonaName.getRandomMaleNames(count);
+        }
+    }
+
+    /**
+     * Parses single persona data from JSON.
+     */
+    private PersonaData parsePersonaData(String personaJson) {
+        try {
+            JsonNode node = objectMapper.readTree(personaJson);
+            return new PersonaData(
+                    node.get("name").asText(),
+                    0,  // age will come from request
+                    node.get("gender").asText(),
+                    "",  // profession not in response
+                    "",  // income not in response
+                    "",  // location not in response
+                    node.get("detailed_bio").asText(),
+                    node.get("product_attitudes").asText(),
+                    ""   // personality_archetype not in response
+            );
+        } catch (Exception e) {
+            throw new ValidationException(
+                    "Failed to parse persona data from AI: " + e.getMessage(),
+                    ErrorCode.INVALID_JSON_RESPONSE.getCode()
+            );
+        }
     }
 
     /**

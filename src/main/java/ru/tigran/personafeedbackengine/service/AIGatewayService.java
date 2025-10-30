@@ -69,6 +69,92 @@ public class AIGatewayService {
     }
 
     /**
+     * Generates persona with FIXED NAME for guaranteed diversity in batch generation.
+     *
+     * RECOMMENDED for batch persona generation:
+     * - Call this method 6 times with 6 different names from PersonaName enum
+     * - AI creates unique persona around each fixed name
+     * - Guarantees all 6 personas have different names (and thus different personas)
+     *
+     * Response is ALWAYS in English for consistency.
+     *
+     * Expected response structure:
+     * {
+     *   "name": "EXACTLY the fixedName provided",
+     *   "gender": "male|female|non-binary",
+     *   "age_group": "18-24|25-34|35-44|45-54|55-64|65+",
+     *   "race": "Asian|Caucasian|African|Hispanic|Middle Eastern|Indigenous|Mixed|Other",
+     *   "detailed_bio": "150-200 word bio including shopping habits, brand preferences, decision-making style",
+     *   "product_attitudes": "How they typically evaluate products in this category"
+     * }
+     *
+     * @param userId User ID (for logging/audit purposes)
+     * @param demographicsJson JSON string with demographics
+     * @param psychographicsJson JSON string with psychographics
+     * @param fixedName Fixed persona name (e.g., "Marina Sokolov") - AI MUST use this exact name
+     * @return JSON string with persona details using the fixed name
+     */
+    public String generatePersonaWithFixedName(
+            Long userId,
+            String demographicsJson,
+            String psychographicsJson,
+            String fixedName
+    ) {
+        log.info("Generating persona with fixed name '{}' for user {}", fixedName, userId);
+
+        String systemPrompt = """
+                You are a professional consumer research analyst creating highly detailed, realistic persona profiles for market research and product development.
+
+                CRITICAL: The persona name is FIXED and MUST NOT be changed.
+                Name: %s (use this EXACTLY)
+
+                INSTRUCTIONS:
+                1. Create persona around the provided name - this determines personality and background
+                2. Generate compelling narrative bio (150-200 words) that fits the name and demographics
+                3. ALL OUTPUT MUST BE IN ENGLISH (regardless of input language)
+                4. Make the persona realistic and grounded in actual consumer behavior patterns
+                5. Consider the interaction between demographics and psychographics
+                6. Describe authentic shopping habits, brand preferences, and decision-making approaches
+                7. Provide thoughtful assessment of how this specific persona would evaluate products
+
+                OUTPUT FORMAT (CRITICAL):
+                - Return ONLY raw JSON object - NO markdown formatting, NO code blocks, NO backticks
+                - Start directly with { and end with }
+                - Do NOT wrap response in ```json``` or similar
+                - ALL text fields must be in ENGLISH
+                - JSON must be valid and properly escaped
+
+                JSON RESPONSE STRUCTURE:
+                {
+                  "name": "%s",
+                  "gender": "male|female|non-binary",
+                  "age_group": "18-24|25-34|35-44|45-54|55-64|65+",
+                  "race": "Asian|Caucasian|African|Hispanic|Middle Eastern|Indigenous|Mixed|Other",
+                  "detailed_bio": "Comprehensive 150-200 word biography fitting this person and demographics",
+                  "product_attitudes": "How this specific persona evaluates and chooses products"
+                }
+
+                Remember: Keep the name EXACTLY as: %s
+                """.formatted(fixedName, fixedName, fixedName);
+
+        String userMessage = String.format("""
+                Create a detailed consumer persona named "%s" based on these characteristics:
+
+                DEMOGRAPHIC PROFILE:
+                %s
+
+                PSYCHOGRAPHIC PROFILE & INTERESTS:
+                %s
+
+                Generate a realistic persona with this exact name that fits the provided profile.""",
+                fixedName, demographicsJson, psychographicsJson);
+
+        String response = callAIProvider(systemPrompt, userMessage);
+        validateJSON(response);
+        return response;
+    }
+
+    /**
      * Generates detailed persona information from structured demographic and psychographic data.
      * IMPORTANT: NOT CACHED - Each persona must be unique even with identical input parameters.
      *

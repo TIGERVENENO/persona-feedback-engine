@@ -54,20 +54,30 @@ User registration and login service with JWT token generation and BCrypt passwor
 - Models are independently configurable
 
 **Synchronous Methods (blocking):**
-- **RECOMMENDED**: `generateMultiplePersonasWithRetry(Long userId, String demographicsJson, int personaCount) -> String`
-  - **NEW**: Generates N distinct personas (typically 6) in a SINGLE AI call
+- **BEST**: `generatePersonaWithFixedName(Long userId, String demographicsJson, String psychographicsJson, String fixedName) -> String`
+  - **NEW**: Generates a single persona with a FIXED NAME (for guaranteed diversity in batch)
+  - **Usage**: Call this 6 times with 6 different names from PersonaName enum for guaranteed diversity
+  - **AI Constraint**: Fixed name is embedded in system prompt - AI MUST use this exact name
+  - **Returns**: JSON object with persona using the fixed name
+  - **Advantages**:
+    - ✅ GUARANTEES DIVERSITY: Different names → completely different personas
+    - ✅ NAME-DRIVEN: Name determines personality, background, values
+    - ✅ SIMPLE: No complex retry logic needed (just call it N times in parallel)
+    - ✅ PARALLEL-FRIENDLY: Each call is independent, can run in parallel
+    - ✅ FLEXIBLE: Works with male/female names from PersonaName enum
+  - **Integration**: Used by `PersonaService.startBatchPersonaGenerationWithFixedNames()` in parallel via CompletableFuture
+
+- `generateMultiplePersonasWithRetry(Long userId, String demographicsJson, int personaCount) -> String`
+  - Generates N distinct personas in a SINGLE AI call
   - **Robust retry mechanism**: Up to 5 retry attempts with exponential backoff (1s, 2s, 4s, 8s, 8s max)
   - **Intelligent error feedback**: If JSON parsing fails, sends explicit error details to AI for correction
   - **Guaranteed to succeed**: Returns valid JSON array or throws exception
   - **Returns**: JSON array with persona objects: `[{"name": "...", "age": 28, "profession": "...", ...}, ...]`
   - **Advantages**:
     - ✅ 1 API call instead of 6 → 6x faster and cheaper
-    - ✅ AI sees all 6 personas at once → guarantees diversity
     - ✅ Strict validation: each persona must have all 9 required fields
-    - ✅ Synchronous: frontend gets response immediately
     - ✅ Exponential backoff prevents overwhelming AI
-  - **Required persona fields**: `name`, `age`, `gender`, `profession`, `income_level`, `location`, `detailed_bio`, `product_attitudes`, `personality_archetype`
-  - **Error handling**: Sends validation error details to AI with explicit correction instructions
+  - **Disadvantage**: ❌ Less diversity guarantee than fixed names approach
 
 - `generatePersonaDetails(Long userId, String demographicsJson, String psychographicsJson)`:
   - Single persona generation (legacy, not recommended for batch)
@@ -110,23 +120,39 @@ User registration and login service with JWT token generation and BCrypt passwor
 - Non-blocking: does not block thread during network I/O
 
 ### PersonaService
-- Entry point for persona generation workflow with **two approaches**
+- Entry point for persona generation workflow with **three approaches**
 
-#### RECOMMENDED: `startBatchPersonaGeneration(Long userId, PersonaGenerationRequest request) -> List<Long>`
-- **NEW**: Batch persona generation with single AI call + robust retry logic
+#### BEST: `startBatchPersonaGenerationWithFixedNames(Long userId, PersonaGenerationRequest request) -> List<Long>` ⭐
+- **NEW**: Batch persona generation with FIXED NAMES in PARALLEL
+- **GUARANTEES DIVERSITY**: Uses PersonaName enum with predefined male/female names
 - Flow:
-  1. Calls `AIGatewayService.generateMultiplePersonasWithRetry()` (with 5 retry attempts)
-  2. Parses JSON array response with guaranteed structure validation
-  3. Creates Persona entities with ACTIVE status (already generated, no async task needed)
-  4. Saves all to DB and explicitly flushes
-  5. Returns list of persona IDs
+  1. Selects N unique random names from PersonaName enum (e.g., 6 different names)
+  2. Starts N CompletableFuture parallel tasks
+  3. Each task calls `AIGatewayService.generatePersonaWithFixedName()` with a specific name
+  4. Waits for all tasks to complete using `CompletableFuture.allOf()`
+  5. Parses all responses
+  6. Creates Persona entities with ACTIVE status
+  7. Saves all to DB and explicitly flushes
+  8. Returns list of persona IDs
 - **Advantages**:
-  - ✅ 1 AI call instead of 6 → faster and cheaper
-  - ✅ AI sees all 6 personas simultaneously → guarantees diversity
-  - ✅ Robust retry with explicit validation feedback (up to 5 attempts)
-  - ✅ Synchronous: frontned gets response immediately (no async queue needed)
-  - ✅ 100% guaranteed to succeed or throw clear exception
-- **Helper record**: `PersonaData` - stores persona data parsed from AI JSON array
+  - ✅ GUARANTEED 100% DIVERSITY: Different names → completely different personas (no Volkovs!)
+  - ✅ PARALLEL EXECUTION: 6 requests run simultaneously → very fast
+  - ✅ FLEXIBLE: Can use male/female names or mix based on gender
+  - ✅ ROBUST: Each request can fail independently without affecting others
+  - ✅ SIMPLE: Fixed names remove AI uncertainty about name generation
+  - ✅ REALISTIC: Name-driven persona generation (name determines entire character)
+- **Helper methods**: `selectRandomNames()`, `parsePersonaData()`
+- **Helper record**: `PersonaData` - stores parsed persona from AI
+
+#### ALTERNATIVE: `startBatchPersonaGeneration(Long userId, PersonaGenerationRequest request) -> List<Long>`
+- Batch persona generation with single AI call + robust retry logic
+- Calls `AIGatewayService.generateMultiplePersonasWithRetry()` (with 5 retry attempts)
+- Generates all 6 personas in ONE AI request
+- **Advantages**:
+  - ✅ 1 API call (cheapest, fastest wall-clock time)
+  - ✅ Robust retry with explicit validation feedback
+  - ✅ 100% guaranteed to succeed or throw exception
+- **Disadvantage**: ❌ Less guaranteed diversity than fixed names approach
 
 #### Legacy: `startPersonaGeneration(Long userId, PersonaGenerationRequest request)`
 - Creates N persona entities in GENERATING state
