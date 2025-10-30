@@ -9,58 +9,28 @@ Provides helper methods that don't fit into specific domain layers.
 ### CacheKeyUtils
 Static utility class for cache key generation and normalization.
 
-**Purpose:**
-Ensures consistent cache keys for personas regardless of minor prompt variations (whitespace, case, formatting).
+**STATUS: DEPRECATED - No longer used**
+- Persona generation intentionally disabled caching to ensure diverse persona generation
+- When generating batch personas (6 personas from same demographic profile), each must be unique
+- Each call to AIGatewayService.generatePersonaDetails() now produces a different persona
+- Cache key normalization is no longer needed
 
-**Methods:**
+**Original Purpose (deprecated):**
+Was used to ensure consistent cache keys for personas regardless of minor prompt variations (whitespace, case, formatting).
 
-- `normalizePrompt(String prompt) → String`
-  - Normalizes prompt string for consistent cache key generation
-  - Transformations applied:
-    1. Trim leading/trailing whitespace
-    2. Convert to lowercase
-    3. Replace multiple spaces with single space
-    4. Replace newlines and tabs with single space
-  - **Example:**
-    ```
-    Input:  "  A developer  from  Berlin  \n  who loves   AI  "
-    Output: "a developer from berlin who loves ai"
-    ```
-  - **Usage:** Called before generating persona cache keys
-  - Returns empty string if input is null
+**Methods (deprecated):**
 
-- `generatePersonaCacheKey(Long userId, String prompt) → String`
-  - Generates cache key combining userId and normalized prompt
-  - Format: `"userId:normalizedPrompt"`
-  - **Example:**
-    ```java
-    generatePersonaCacheKey(123L, "  Tech enthusiast  ")
-    // Returns: "123:tech enthusiast"
-    ```
-  - **Usage:** Called by AIGatewayService.generatePersonaDetails() for @Cacheable annotation
+- `normalizePrompt(String prompt) → String` - DEPRECATED
+  - Previously normalized prompt string for consistent cache key generation
+
+- `generatePersonaCacheKey(Long userId, String prompt) → String` - DEPRECATED
+  - Previously generated cache key combining userId and normalized prompt
+
+**Why it was removed:**
+- AIGatewayService no longer uses @Cacheable annotation on generatePersonaDetails()
+- Each persona call must produce a unique result for batch generation to work properly
+- User receives diverse personas instead of identical ones when generating 6 personas from same parameters
 
 **Design Notes:**
-- Private constructor prevents instantiation (utility class pattern)
-- All methods are static and stateless
-- Normalization ensures cache hits for semantically identical prompts
-
-## Integration Points
-
-### AIGatewayService
-- Uses `generatePersonaCacheKey()` for persona caching
-- Cache key format enables user-scoped persona reusability
-- Prevents cache collisions between different users with same prompts
-
-## Common Patterns
-
-**Caching persona by prompt:**
-```java
-@Cacheable(value = "personaCache", key = "T(ru.tigran.personafeedbackengine.util.CacheKeyUtils).generatePersonaCacheKey(#userId, #userPrompt)")
-public String generatePersonaDetails(Long userId, String userPrompt) {
-    // AI generation logic
-}
-```
-
-**Why normalization matters:**
-- Without normalization: "Tech enthusiast" and "tech  enthusiast  " would be different cache keys
-- With normalization: Both map to "tech enthusiast" → cache hit
+- Kept for reference/history
+- Can be removed in future cleanup if not referenced elsewhere

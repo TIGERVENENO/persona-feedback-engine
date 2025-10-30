@@ -55,7 +55,8 @@ User registration and login service with JWT token generation and BCrypt passwor
 
 **Synchronous Methods (blocking):**
 - `generatePersonaDetails(Long userId, String demographicsJson, String psychographicsJson)`:
-  - Cacheable (by userId + demographics + psychographics)
+  - **NOT CACHED** - Each persona call produces a unique persona, even with identical input parameters
+  - This ensures batch persona generation (e.g., 6 personas from same demographics) creates DIVERSE personas
   - Generates detailed persona profile with consumer behavior focus
   - **Output ALWAYS in English** for consistency
   - Returns JSON with required and optional fields:

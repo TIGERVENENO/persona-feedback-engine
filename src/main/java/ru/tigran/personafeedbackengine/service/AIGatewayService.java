@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -14,7 +13,6 @@ import reactor.util.retry.Retry;
 import ru.tigran.personafeedbackengine.exception.AIGatewayException;
 import ru.tigran.personafeedbackengine.exception.ErrorCode;
 import ru.tigran.personafeedbackengine.exception.RetriableHttpException;
-import ru.tigran.personafeedbackengine.util.CacheKeyUtils;
 
 import java.time.Duration;
 
@@ -72,9 +70,12 @@ public class AIGatewayService {
 
     /**
      * Generates detailed persona information from structured demographic and psychographic data.
-     * This method is cacheable by userId + structured data JSON to isolate data between users.
+     * IMPORTANT: NOT CACHED - Each persona must be unique even with identical input parameters.
      *
-     * IMPORTANT: Response is ALWAYS in English for consistency in persona profiles.
+     * When generating batch personas (e.g., 6 personas from same demographic profile),
+     * each call to this method produces a DIFFERENT persona to create variety in feedback.
+     *
+     * Response is ALWAYS in English for consistency in persona profiles.
      * Personas are generated based on comprehensive demographic and psychographic parameters including:
      * - Demographics: gender, country, city, age range, activity sphere, profession, income
      * - Psychographics: interests, additional parameters
@@ -89,12 +90,11 @@ public class AIGatewayService {
      *   "product_attitudes": "How they typically evaluate products in this category"
      * }
      *
-     * @param userId User ID for cache isolation
+     * @param userId User ID (for logging/audit purposes)
      * @param demographicsJson JSON string with demographics (age range, gender, location, occupation, income)
      * @param psychographicsJson JSON string with psychographics (activity sphere, additional params, pain points)
-     * @return JSON string with persona details (always in English)
+     * @return JSON string with persona details (always in English, unique for each call)
      */
-    @Cacheable(value = "personaCache", key = "T(ru.tigran.personafeedbackengine.util.CacheKeyUtils).generatePersonaCacheKey(#userId, #demographicsJson + #psychographicsJson)")
     public String generatePersonaDetails(Long userId, String demographicsJson, String psychographicsJson) {
         log.info("Generating detailed persona profile for user {}", userId);
 
@@ -352,7 +352,25 @@ public class AIGatewayService {
                         })
                         .body(String.class);
 
-                return extractMessageContent(response);
+                String extractedContent = extractMessageContent(response);
+
+                // ===== LOG ALL AI REQUESTS AND RESPONSES =====
+                log.info("════════════════════════════════════════════════════════════════════════");
+                log.info("🤖 AI GATEWAY REQUEST/RESPONSE");
+                log.info("════════════════════════════════════════════════════════════════════════");
+                log.info("Provider: {} | Model: {} | Attempt: {}/{}", provider, model, attempt + 1, maxRetries);
+                log.info("");
+                log.info("📤 SYSTEM PROMPT:");
+                log.info("{}", systemPrompt);
+                log.info("");
+                log.info("📤 USER MESSAGE:");
+                log.info("{}", userMessage);
+                log.info("");
+                log.info("📥 AI RESPONSE:");
+                log.info("{}", extractedContent);
+                log.info("════════════════════════════════════════════════════════════════════════");
+
+                return extractedContent;
 
             } catch (RetriableHttpException e) {
                 attempt++;
