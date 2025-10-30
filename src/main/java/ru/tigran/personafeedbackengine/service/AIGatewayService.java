@@ -1301,4 +1301,20 @@ public class AIGatewayService {
             super(message);
         }
     }
+
+    /**
+     * Gets the currently configured AI model name.
+     * Used for tracking which model was used to generate a persona.
+     *
+     * @return Model name (e.g., "claude-3-5-sonnet", "gpt-4o")
+     */
+    public String getConfiguredModel() {
+        if ("openrouter".equalsIgnoreCase(provider)) {
+            return openRouterModel;
+        } else if ("agentrouter".equalsIgnoreCase(provider)) {
+            return agentRouterModel;
+        } else {
+            return "unknown";
+        }
+    }
 }

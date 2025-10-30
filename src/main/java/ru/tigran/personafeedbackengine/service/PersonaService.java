@@ -255,6 +255,9 @@ public class PersonaService {
             persona.setCharacteristicsHash(characteristicsJson);
             persona.setGenerationPrompt(characteristicsJson);
 
+            // Set AI model used for generation
+            persona.setModel(aiGatewayService.getConfiguredModel());
+
             // Calculate age group
             String ageGroup = calculateAgeGroup(request.minAge(), request.maxAge());
             persona.setAgeGroup(ageGroup);
@@ -461,6 +464,9 @@ public class PersonaService {
             String ageGroup = calculateAgeGroup(personaData.age(), personaData.age());
             persona.setAgeGroup(ageGroup);
 
+            // Set AI model used for generation
+            persona.setModel(aiGatewayService.getConfiguredModel());
+
             // Save persona
             Persona saved = personaRepository.save(persona);
             createdPersonas.add(saved);
@@ -585,6 +591,9 @@ public class PersonaService {
             // Calculate age group from min/max age
             String ageGroup = calculateAgeGroup(request.minAge(), request.maxAge());
             persona.setAgeGroup(ageGroup);
+
+            // Set AI model used for generation
+            persona.setModel(aiGatewayService.getConfiguredModel());
 
             // Store characteristics hash for fast search
             persona.setCharacteristicsHash(characteristicsJson);
