@@ -821,7 +821,7 @@ public class PersonaService {
                 persona.getMaxAge(),
                 persona.getActivitySphere(),
                 persona.getProfession(),
-                persona.getIncome(),
+                persona.getIncomeLevel() != null ? persona.getIncomeLevel().getValue() : null,
                 interests,
                 persona.getAdditionalParams(),
                 persona.getAgeGroup(),
@@ -970,7 +970,13 @@ public class PersonaService {
             persona.setDemographicGender(variation.gender());
             persona.setAge(variation.age());
             persona.setRegion(variation.region());
-            persona.setIncomeLevel(variation.incomeLevel());
+            if (variation.incomeLevel() != null) {
+                try {
+                    persona.setIncomeLevel(IncomeLevel.fromValue(variation.incomeLevel()));
+                } catch (Exception e) {
+                    log.warn("Could not parse income level '{}': {}", variation.incomeLevel(), e.getMessage());
+                }
+            }
             persona.setGenerationPrompt(demographicsJson + psychographicsJson);
 
             Persona savedPersona = personaRepository.save(persona);
