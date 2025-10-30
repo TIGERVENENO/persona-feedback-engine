@@ -33,12 +33,6 @@ public class Persona extends AuditableEntity {
     @Column(columnDefinition = "TEXT")
     private String detailedDescription;
 
-    private String gender;
-
-    private String ageGroup;
-
-    private String race;
-
     private String avatarUrl;
 
     @Column(columnDefinition = "TEXT")
@@ -89,10 +83,6 @@ public class Persona extends AuditableEntity {
     // Legacy fields (for backward compatibility)
     @Column(length = 50)
     private String region;  // "moscow", "spb", "regions" - DEPRECATED: use city/country instead
-
-    @Column(columnDefinition = "JSONB")
-    @JdbcTypeCode(SqlTypes.JSON)
-    private String demographicsHash;  // JSON hash for uniqueness and caching - DEPRECATED: use characteristicsHash
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

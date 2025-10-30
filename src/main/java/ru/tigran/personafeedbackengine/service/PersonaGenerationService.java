@@ -167,11 +167,6 @@ public class PersonaGenerationService {
      * - detailed_bio → detailedDescription
      * - product_attitudes → productAttitudes
      *
-     * Optional field mapping (only if present in AI response):
-     * - gender → gender
-     * - age_group → ageGroup
-     * - race → race
-     *
      * @param persona Persona entity to update
      * @param details JsonNode with generated details
      */
@@ -179,17 +174,6 @@ public class PersonaGenerationService {
         persona.setName(details.get("name").asText());
         persona.setDetailedDescription(details.get("detailed_bio").asText());
         persona.setProductAttitudes(details.get("product_attitudes").asText());
-
-        // Optional fields - only set if present in response
-        if (details.has("gender") && !details.get("gender").isNull()) {
-            persona.setGender(details.get("gender").asText());
-        }
-        if (details.has("age_group") && !details.get("age_group").isNull()) {
-            persona.setAgeGroup(details.get("age_group").asText());
-        }
-        if (details.has("race") && !details.get("race").isNull()) {
-            persona.setRace(details.get("race").asText());
-        }
 
         persona.setStatus(Persona.PersonaStatus.ACTIVE);
     }

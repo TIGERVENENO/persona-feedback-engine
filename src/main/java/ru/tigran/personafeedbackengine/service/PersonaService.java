@@ -221,7 +221,6 @@ public class PersonaService {
             persona.setName(personaData.name());
             persona.setDetailedDescription(personaData.detailedBio());
             persona.setProductAttitudes(personaData.productAttitudes());
-            persona.setGender(personaData.gender());
 
             // Set demographic fields from request
             persona.setCountry(request.country().getCode());
@@ -257,10 +256,6 @@ public class PersonaService {
 
             // Set AI model used for generation
             persona.setModel(aiGatewayService.getConfiguredModel());
-
-            // Calculate age group
-            String ageGroup = calculateAgeGroup(request.minAge(), request.maxAge());
-            persona.setAgeGroup(ageGroup);
 
             // Save persona
             Persona saved = personaRepository.save(persona);
@@ -427,7 +422,6 @@ public class PersonaService {
             persona.setName(personaData.name());
             persona.setDetailedDescription(personaData.detailedBio());
             persona.setProductAttitudes(personaData.productAttitudes());
-            persona.setGender(personaData.gender());
             persona.setAge(personaData.age());
 
             // Set demographic fields from request
@@ -459,10 +453,6 @@ public class PersonaService {
             // Store characteristics hash for potential reuse
             persona.setCharacteristicsHash(characteristicsJson);
             persona.setGenerationPrompt(characteristicsJson);
-
-            // Calculate age group
-            String ageGroup = calculateAgeGroup(personaData.age(), personaData.age());
-            persona.setAgeGroup(ageGroup);
 
             // Set AI model used for generation
             persona.setModel(aiGatewayService.getConfiguredModel());
@@ -588,10 +578,6 @@ public class PersonaService {
             }
             persona.setAdditionalParams(request.additionalParams());
 
-            // Calculate age group from min/max age
-            String ageGroup = calculateAgeGroup(request.minAge(), request.maxAge());
-            persona.setAgeGroup(ageGroup);
-
             // Set AI model used for generation
             persona.setModel(aiGatewayService.getConfiguredModel());
 
@@ -654,30 +640,6 @@ public class PersonaService {
             return minAge;
         }
         return minAge + (int) (Math.random() * (maxAge - minAge + 1));
-    }
-
-    /**
-     * Calculates age group string from min and max age
-     */
-    private String calculateAgeGroup(Integer minAge, Integer maxAge) {
-        if (minAge == null || maxAge == null) {
-            return null;
-        }
-        int avgAge = (minAge + maxAge) / 2;
-
-        if (avgAge < 25) {
-            return "18-24";
-        } else if (avgAge < 35) {
-            return "25-34";
-        } else if (avgAge < 45) {
-            return "35-44";
-        } else if (avgAge < 55) {
-            return "45-54";
-        } else if (avgAge < 65) {
-            return "55-64";
-        } else {
-            return "65+";
-        }
     }
 
     /**
@@ -851,8 +813,6 @@ public class PersonaService {
                 persona.getIncomeLevel(),
                 interests,
                 persona.getAdditionalParams(),
-                persona.getAgeGroup(),
-                persona.getRace(),
                 persona.getAvatarUrl(),
                 persona.getCreatedAt()
         );

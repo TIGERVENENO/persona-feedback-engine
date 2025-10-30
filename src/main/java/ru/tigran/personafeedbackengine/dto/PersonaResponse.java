@@ -31,10 +31,6 @@ public record PersonaResponse(
         List<String> interests,      // Optional array of interests/hobbies
         String additionalParams,     // Optional additional characteristics
 
-        // AI-extracted demographics (for consistency with AI generation)
-        String ageGroup,             // e.g., "25-34", "35-44" (extracted from minAge/maxAge)
-        String race,                 // Race/ethnicity if AI extracted it
-
         // UI
         String avatarUrl,
 
