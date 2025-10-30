@@ -27,6 +27,16 @@ import java.util.stream.Collectors;
 @Service
 public class PersonaService {
 
+    /**
+     * Helper record for storing persona generation information
+     * Used in two-phase approach to separate persona creation from task publishing
+     */
+    private record PersonaGenerationInfo(
+            Long personaId,
+            PersonaGenerationTask task,
+            int variantNumber
+    ) {}
+
     private final PersonaRepository personaRepository;
     private final UserRepository userRepository;
     private final RabbitTemplate rabbitTemplate;
@@ -85,9 +95,9 @@ public class PersonaService {
 
         // Get the count of personas to generate (default 6)
         int personaCount = request.getCountOrDefault();
-        List<Long> createdPersonaIds = new ArrayList<>();
+        List<Persona> createdPersonas = new ArrayList<>();
 
-        // Create multiple personas based on the count
+        // Step 1: Create ALL personas first (without publishing tasks yet)
         for (int i = 0; i < personaCount; i++) {
             Persona persona = new Persona();
             persona.setUser(user);
@@ -126,28 +136,44 @@ public class PersonaService {
 
             // Save persona to database
             Persona savedPersona = personaRepository.save(persona);
-            createdPersonaIds.add(savedPersona.getId());
+            createdPersonas.add(savedPersona);
             log.info("Created persona entity {} ({}/{})", savedPersona.getId(), i + 1, personaCount);
+        }
+
+        // Step 2: Flush to ensure all personas are persisted before publishing tasks
+        // This prevents race conditions where RabbitMQ consumer tries to fetch persona before it's committed
+        personaRepository.flush();
+        log.info("Flushed {} personas to database before publishing tasks", createdPersonas.size());
+
+        // Step 3: Now publish ALL generation tasks to queue
+        for (int i = 0; i < createdPersonas.size(); i++) {
+            Persona persona = createdPersonas.get(i);
+
+            // Build demographics and psychographics with variant number for diversity
+            String demographicsJson = buildDemographicsJson(request);
+            String psychographicsJson = buildPsychographicsJsonWithVariant(request, i + 1);
 
             // Publish task to queue for AI generation
             PersonaGenerationTask task = new PersonaGenerationTask(
-                    savedPersona.getId(),
-                    buildDemographicsJson(request),
-                    buildPsychographicsJson(request)
+                    persona.getId(),
+                    demographicsJson,
+                    psychographicsJson
             );
             rabbitTemplate.convertAndSend(
                     RabbitMQConfig.EXCHANGE_NAME,
                     "persona.generation",
                     task
             );
-            log.info("Published persona generation task for persona {}", savedPersona.getId());
+            log.info("Published persona generation task for persona {} (variant {}/{})", persona.getId(), i + 1, createdPersonas.size());
 
             personaGenerationInitiatedCounter.increment();
         }
 
+        log.info("Successfully created and published {} personas for user {}", createdPersonas.size(), userId);
+
         // Return the ID of the first created persona (or a job/batch ID in real scenario)
         // In production, you might return a batch ID linking all personas
-        return createdPersonaIds.get(0);
+        return createdPersonas.get(0).getId();
     }
 
     /**
@@ -205,6 +231,29 @@ public class PersonaService {
                     ""  // painPoints will be determined by AI
             );
             return objectMapper.writeValueAsString(psychographics);
+        } catch (Exception e) {
+            log.warn("Could not build psychographics JSON: {}", e.getMessage());
+            return "{}";
+        }
+    }
+
+    /**
+     * Builds psychographics JSON with variant number for diversity.
+     * Includes variant_number to encourage AI to generate different personas for batch requests.
+     *
+     * @param request The persona generation request
+     * @param variantNumber The variant number (1-indexed)
+     * @return JSON string with psychographics including variant number
+     */
+    private String buildPsychographicsJsonWithVariant(PersonaGenerationRequest request, int variantNumber) {
+        try {
+            String interests = request.interests() != null ? String.join(", ", request.interests()) : "";
+            Map<String, Object> psychographicsMap = new LinkedHashMap<>();
+            psychographicsMap.put("values", request.activitySphere().getDisplayName() + (interests.isEmpty() ? "" : ", " + interests));
+            psychographicsMap.put("lifestyle", request.additionalParams() != null ? request.additionalParams() : "");
+            psychographicsMap.put("pain_points", "");  // AI will determine
+            psychographicsMap.put("variant_number", variantNumber);  // For diversity hint
+            return objectMapper.writeValueAsString(psychographicsMap);
         } catch (Exception e) {
             log.warn("Could not build psychographics JSON: {}", e.getMessage());
             return "{}";
@@ -316,6 +365,11 @@ public class PersonaService {
      * 2. Если найдена - переиспользует
      * 3. Если не найдена - создаёт новую и запускает генерацию через AI
      *
+     * Uses two-phase approach to prevent race conditions:
+     * - Phase 1: Find existing or create all new personas and persist to DB
+     * - Phase 2: Flush all to ensure database consistency
+     * - Phase 3: Publish generation tasks for newly created personas
+     *
      * @param userId     ID пользователя
      * @param variations Список вариаций для поиска/создания
      * @return Список ID персон (существующих или новых)
@@ -328,8 +382,12 @@ public class PersonaService {
                 .orElseThrow(() -> new ValidationException("User not found", ErrorCode.USER_NOT_FOUND.getCode()));
 
         List<Long> personaIds = new ArrayList<>();
+        List<PersonaGenerationInfo> newPersonasToPublish = new ArrayList<>();
 
-        for (PersonaVariation variation : variations) {
+        // Phase 1: Find existing or create new personas
+        for (int index = 0; index < variations.size(); index++) {
+            PersonaVariation variation = variations.get(index);
+
             // Пытаемся найти существующую персону
             Optional<Persona> existingPersona = personaRepository.findByDemographics(
                     userId,
@@ -345,25 +403,74 @@ public class PersonaService {
                 personaIds.add(personaId);
                 log.debug("Reusing existing persona {} for variation {}", personaId, variation);
             } else {
-                // Не нашли - создаём новую
-                Long newPersonaId = createPersonaFromVariation(user, variation);
-                personaIds.add(newPersonaId);
-                log.debug("Created new persona {} for variation {}", newPersonaId, variation);
+                // Не нашли - создаём новую (без публикации task)
+                PersonaGenerationInfo generationInfo = createPersonaFromVariationWithoutPublishing(user, variation, index + 1);
+                personaIds.add(generationInfo.personaId());
+                newPersonasToPublish.add(generationInfo);
+                log.debug("Created new persona {} for variation {}", generationInfo.personaId(), variation);
             }
         }
 
-        log.info("Found/created {} personas: {}", personaIds.size(), personaIds);
+        // Phase 2: Flush all new personas to database to ensure they are persisted
+        if (!newPersonasToPublish.isEmpty()) {
+            personaRepository.flush();
+            log.info("Flushed {} new personas to database before publishing tasks", newPersonasToPublish.size());
+        }
+
+        // Phase 3: Publish generation tasks for newly created personas
+        for (PersonaGenerationInfo generationInfo : newPersonasToPublish) {
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConfig.EXCHANGE_NAME,
+                    "persona.generation",
+                    generationInfo.task()
+            );
+            log.info("Published generation task for persona {} (variant {}/{})",
+                    generationInfo.personaId(), generationInfo.variantNumber(), newPersonasToPublish.size());
+            personaGenerationInitiatedCounter.increment();
+        }
+
+        log.info("Found/created {} personas ({} new, {} existing): {}",
+                personaIds.size(), newPersonasToPublish.size(), personaIds.size() - newPersonasToPublish.size(), personaIds);
         return personaIds;
     }
 
     /**
      * Создаёт новую персону из вариации и запускает генерацию деталей через AI.
+     * (Существует для обратной совместимости, вызывает основной метод)
      *
      * @param user      Пользователь-владелец
      * @param variation Демографические параметры
      * @return ID созданной персоны
      */
     private Long createPersonaFromVariation(User user, PersonaVariation variation) {
+        PersonaGenerationInfo info = createPersonaFromVariationWithoutPublishing(user, variation, 1);
+
+        // Publish the task immediately (for backward compatibility with old code)
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.EXCHANGE_NAME,
+                "persona.generation",
+                info.task()
+        );
+        log.info("Published generation task for persona {}", info.personaId());
+        personaGenerationInitiatedCounter.increment();
+
+        return info.personaId();
+    }
+
+    /**
+     * Создаёт новую персону из вариации БЕЗ публикации task.
+     * Используется в двухфазном подходе findOrCreatePersonas для предотвращения race conditions.
+     *
+     * @param user           Пользователь-владелец
+     * @param variation      Демографические параметры
+     * @param variantNumber  Номер варианта (для diversity)
+     * @return PersonaGenerationInfo с персоной и task (но task ещё не опубликован)
+     */
+    private PersonaGenerationInfo createPersonaFromVariationWithoutPublishing(
+            User user,
+            PersonaVariation variation,
+            int variantNumber
+    ) {
         try {
             // Создаём demographics DTO для AI промпта
             PersonaDemographics demographics = new PersonaDemographics(
@@ -374,12 +481,12 @@ public class PersonaService {
                     variation.incomeLevel()           // income
             );
 
-            // Генерируем базовые psychographics (AI дополнит детали)
+            // Генерируем базовые psychographics с вариант номером (AI дополнит детали)
             PersonaPsychographics psychographics = generateDefaultPsychographics(variation);
+            String psychographicsJson = buildPsychographicsFromPsychographicsObjectWithVariant(psychographics, variantNumber);
 
             // Сериализуем в JSON для AI
             String demographicsJson = objectMapper.writeValueAsString(demographics);
-            String psychographicsJson = objectMapper.writeValueAsString(psychographics);
 
             // Создаём entity с demographics полями для БД-поиска
             Persona persona = new Persona();
@@ -393,28 +500,41 @@ public class PersonaService {
             persona.setGenerationPrompt(demographicsJson + psychographicsJson);
 
             Persona savedPersona = personaRepository.save(persona);
-            log.info("Created persona entity {} for variation {}", savedPersona.getId(), variation);
+            log.info("Created persona entity {} for variation {} (variant {})", savedPersona.getId(), variation, variantNumber);
 
-            // Публикуем задачу на генерацию деталей
+            // Подготавливаем task (но НЕ публикуем его)
             PersonaGenerationTask task = new PersonaGenerationTask(
                     savedPersona.getId(),
                     demographicsJson,
                     psychographicsJson
             );
-            rabbitTemplate.convertAndSend(
-                    RabbitMQConfig.EXCHANGE_NAME,
-                    "persona.generation",
-                    task
-            );
-            log.info("Published generation task for persona {}", savedPersona.getId());
 
-            personaGenerationInitiatedCounter.increment();
-            return savedPersona.getId();
+            return new PersonaGenerationInfo(savedPersona.getId(), task, variantNumber);
         } catch (Exception e) {
             throw new ValidationException(
                     "Failed to create persona from variation: " + e.getMessage(),
                     ErrorCode.VALIDATION_ERROR.getCode()
             );
+        }
+    }
+
+    /**
+     * Конвертирует PersonaPsychographics объект в JSON строку с добавлением варианта номера.
+     */
+    private String buildPsychographicsFromPsychographicsObjectWithVariant(
+            PersonaPsychographics psychographics,
+            int variantNumber
+    ) {
+        try {
+            Map<String, Object> psychographicsMap = new LinkedHashMap<>();
+            psychographicsMap.put("values", psychographics.values());
+            psychographicsMap.put("lifestyle", psychographics.lifestyle());
+            psychographicsMap.put("pain_points", psychographics.painPoints());
+            psychographicsMap.put("variant_number", variantNumber);  // For diversity hint
+            return objectMapper.writeValueAsString(psychographicsMap);
+        } catch (Exception e) {
+            log.warn("Could not build psychographics JSON: {}", e.getMessage());
+            return "{}";
         }
     }
 

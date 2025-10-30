@@ -57,6 +57,14 @@ User registration and login service with JWT token generation and BCrypt passwor
 - `generatePersonaDetails(Long userId, String demographicsJson, String psychographicsJson)`:
   - **NOT CACHED** - Each persona call produces a unique persona, even with identical input parameters
   - This ensures batch persona generation (e.g., 6 personas from same demographics) creates DIVERSE personas
+  - **Variant-based diversity**: Extracts `variant_number` from psychographicsJson JSON
+    - If `variant_number` is present, includes explicit diversity instruction in system prompt
+    - AI is instructed to generate DISTINCTLY DIFFERENT persona from others in batch:
+      - Different name origin/cultural background
+      - Different personality traits and values
+      - Different profession/occupation type
+      - Different shopping philosophy and decision-making style
+      - Different lifestyle priorities and interests
   - Generates detailed persona profile with consumer behavior focus
   - **Output ALWAYS in English** for consistency
   - Returns JSON with required and optional fields:
@@ -102,18 +110,29 @@ User registration and login service with JWT token generation and BCrypt passwor
 
 ### PersonaService
 - Entry point for persona generation workflow
+- Uses **two-phase approach** for race condition prevention:
+  - Phase 1: Create all personas and persist to DB
+  - Phase 2: Explicitly flush to ensure database consistency
+  - Phase 3: Publish all generation tasks to queue
 - `startPersonaGeneration(Long userId, PersonaGenerationRequest request)`:
-  - Serializes demographics and psychographics to JSON strings
-  - Creates Persona entity (state: GENERATING)
-  - Publishes PersonaGenerationTask to queue with demographicsJson and psychographicsJson
-  - Stores combined JSON as generationPrompt for cache key purposes
+  - **Phase 1**: Creates N persona entities (state: GENERATING)
+  - **Phase 2**: Calls `personaRepository.flush()` to ensure all persisted
+  - **Phase 3**: Publishes PersonaGenerationTasks to queue with demographicsJson and psychographicsJsonWithVariant
+  - Each persona gets variant_number in psychographics for diversity
+  - Returns ID of first created persona
 - `findOrCreatePersonas(Long userId, List<PersonaVariation> variations) -> List<Long>`:
-  - Finds existing or creates new personas based on demographics
+  - **Two-phase approach**: Find/create all, flush, then publish tasks
   - For each variation: searches DB by demographics (gender, age, region, incomeLevel)
-  - If found ACTIVE persona - reuses it
-  - If not found - creates new persona and triggers AI generation
+  - If found ACTIVE persona - reuses it (no new task published)
+  - If not found - creates new persona (without publishing yet) and stores in list
+  - After creating all new personas: calls `personaRepository.flush()`
+  - Then publishes all tasks with variant_number included
   - Returns list of persona IDs (mix of existing and newly created)
+- **Variant-based diversity**: Each persona in batch gets unique variant_number in JSON
+  - Variant number passed to AI in psychographicsJson as `"variant_number": N`
+  - AI uses variant number to generate different personas in batch
 - Validates user existence
+- **Helper record**: `PersonaGenerationInfo(personaId, task, variantNumber)` - stores persona generation info for two-phase approach
 
 ### PersonaVariationService
 - Generates demographic variations from target audience parameters

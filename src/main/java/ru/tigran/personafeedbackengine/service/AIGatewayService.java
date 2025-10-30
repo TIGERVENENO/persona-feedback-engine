@@ -98,6 +98,22 @@ public class AIGatewayService {
     public String generatePersonaDetails(Long userId, String demographicsJson, String psychographicsJson) {
         log.info("Generating detailed persona profile for user {}", userId);
 
+        // Extract variant_number from psychographicsJson for diversity
+        int variantNumber = extractVariantNumber(psychographicsJson);
+        String variantInstruction = "";
+        if (variantNumber > 0) {
+            variantInstruction = String.format("""
+
+                VARIANT DIVERSITY INSTRUCTION (Persona Variant #%d):
+                This is variant #%d of a batch persona generation. Generate a DISTINCTLY DIFFERENT persona from others in the batch:
+                - Use a different name origin/cultural background if possible
+                - Create different personality traits and values
+                - Vary their profession/occupation type if within same general area
+                - Different shopping philosophy and decision-making style
+                - Different lifestyle priorities and interests
+                Each variant should be unique and not resemble previous personas in the same batch.""", variantNumber, variantNumber);
+        }
+
         String systemPrompt = """
                 You are a professional consumer research analyst creating highly detailed, realistic persona profiles for market research and product development.
 
@@ -109,6 +125,7 @@ public class AIGatewayService {
                 5. Consider the interaction between demographics (age, location, profession, income) and psychographics (interests, values)
                 6. Describe authentic shopping habits, brand preferences, and decision-making approaches based on the persona's background
                 7. Provide thoughtful assessment of how this specific persona would evaluate and choose products
+                """ + variantInstruction + """
 
                 OUTPUT FORMAT (CRITICAL):
                 - Return ONLY raw JSON object - NO markdown formatting, NO code blocks, NO backticks
@@ -143,6 +160,22 @@ public class AIGatewayService {
         String response = callAIProvider(systemPrompt, userMessage);
         validateJSON(response);
         return response;
+    }
+
+    /**
+     * Extracts variant_number from psychographicsJson if present.
+     * Returns 0 if not found or if not in batch generation context.
+     */
+    private int extractVariantNumber(String psychographicsJson) {
+        try {
+            JsonNode node = objectMapper.readTree(psychographicsJson);
+            if (node.has("variant_number")) {
+                return node.get("variant_number").asInt(0);
+            }
+        } catch (Exception e) {
+            log.debug("Could not extract variant_number from psychographicsJson: {}", e.getMessage());
+        }
+        return 0;
     }
 
     /**
@@ -355,20 +388,20 @@ public class AIGatewayService {
                 String extractedContent = extractMessageContent(response);
 
                 // ===== LOG ALL AI REQUESTS AND RESPONSES =====
-                log.info("════════════════════════════════════════════════════════════════════════");
-                log.info("🤖 AI GATEWAY REQUEST/RESPONSE");
-                log.info("════════════════════════════════════════════════════════════════════════");
-                log.info("Provider: {} | Model: {} | Attempt: {}/{}", provider, model, attempt + 1, maxRetries);
-                log.info("");
-                log.info("📤 SYSTEM PROMPT:");
-                log.info("{}", systemPrompt);
-                log.info("");
-                log.info("📤 USER MESSAGE:");
-                log.info("{}", userMessage);
-                log.info("");
-                log.info("📥 AI RESPONSE:");
-                log.info("{}", extractedContent);
-                log.info("════════════════════════════════════════════════════════════════════════");
+//                log.info("════════════════════════════════════════════════════════════════════════");
+//                log.info("🤖 AI GATEWAY REQUEST/RESPONSE");
+//                log.info("════════════════════════════════════════════════════════════════════════");
+//                log.info("Provider: {} | Model: {} | Attempt: {}/{}", provider, model, attempt + 1, maxRetries);
+//                log.info("");
+//                log.info("📤 SYSTEM PROMPT:");
+//                log.info("{}", systemPrompt);
+//                log.info("");
+//                log.info("📤 USER MESSAGE:");
+//                log.info("{}", userMessage);
+//                log.info("");
+//                log.info("📥 AI RESPONSE:");
+//                log.info("{}", extractedContent);
+//                log.info("════════════════════════════════════════════════════════════════════════");
 
                 return extractedContent;
 
