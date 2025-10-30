@@ -11,10 +11,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import ru.tigran.personafeedbackengine.dto.PersonaDemographics;
-import ru.tigran.personafeedbackengine.dto.PersonaGenerationRequest;
-import ru.tigran.personafeedbackengine.dto.PersonaGenerationTask;
-import ru.tigran.personafeedbackengine.dto.PersonaPsychographics;
+import ru.tigran.personafeedbackengine.dto.*;
 import ru.tigran.personafeedbackengine.exception.ValidationException;
 import ru.tigran.personafeedbackengine.model.Persona;
 import ru.tigran.personafeedbackengine.model.User;
@@ -66,19 +63,19 @@ class PersonaServiceTest {
     }
 
     private PersonaGenerationRequest createValidRequest() {
-        PersonaDemographics demographics = new PersonaDemographics(
-                "30-40",  // age
-                "Male",   // gender
-                "New York, USA",  // location
-                "Product Manager",  // occupation
-                "$100k-$150k"  // income
+        return new PersonaGenerationRequest(
+                Gender.MALE,                           // gender
+                Country.US,                            // country
+                "New York",                            // city
+                30,                                    // minAge
+                40,                                    // maxAge
+                ActivitySphere.CONSULTING,             // activitySphere
+                "Product Manager",                     // profession
+                "$100k-$150k",                         // income
+                java.util.List.of("Innovation", "Leadership", "Technology"),  // interests
+                "Active, tech-savvy lifestyle",        // additionalParams
+                6                                      // count
         );
-        PersonaPsychographics psychographics = new PersonaPsychographics(
-                "Innovation, Leadership",  // values
-                "Active, tech-savvy",  // lifestyle
-                "Limited time, budget"  // painPoints
-        );
-        return new PersonaGenerationRequest(demographics, psychographics);
     }
 
     // ===== УСПЕШНЫЕ СЦЕНАРИИ =====
