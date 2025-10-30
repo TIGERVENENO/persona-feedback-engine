@@ -10,7 +10,7 @@ import java.util.List;
  * Will generate multiple personas (default 6) based on the provided characteristics.
  *
  * Structure:
- * - Demographics: gender, country, city, age range, activity sphere, profession, income
+ * - Demographics: gender, country, city, age range, activity sphere, profession, incomeLevel
  * - Psychographics: interests, additional parameters
  * - Batch generation: count field specifies how many personas to generate
  *
@@ -19,6 +19,7 @@ import java.util.List;
  * - Generation is async, client must poll the persona endpoint to check status
  * - Characteristics are used for persona reusability/search via characteristicsHash
  * - count field defaults to 6 personas per request
+ * - incomeLevel is an enum (LOW, MEDIUM, HIGH) for type safety
  */
 public record PersonaGenerationRequest(
         @NotNull(message = "Gender cannot be null")
@@ -47,8 +48,8 @@ public record PersonaGenerationRequest(
         @Size(max = 150, message = "Profession must not exceed 150 characters")
         String profession,
 
-        @Size(max = 100, message = "Income must not exceed 100 characters")
-        String income,
+        @NotNull(message = "Income level cannot be null")
+        IncomeLevel incomeLevel,
 
         @Size(max = 10, message = "Interests list must not exceed 10 items")
         List<@Size(min = 1, max = 50, message = "Each interest must be between 1 and 50 characters") String> interests,

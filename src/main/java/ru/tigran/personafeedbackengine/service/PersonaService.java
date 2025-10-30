@@ -223,14 +223,9 @@ public class PersonaService {
             persona.setActivitySphere(request.activitySphere().getValue());
             persona.setProfession(request.profession());
 
-            // Set income level if provided
-            if (request.income() != null) {
-                try {
-                    IncomeLevel incomeLevel = IncomeLevel.fromValue(request.income());
-                    persona.setIncomeLevel(incomeLevel.getValue());
-                } catch (Exception e) {
-                    log.warn("Could not parse income level '{}': {}", request.income(), e.getMessage());
-                }
+            // Set income level (already validated as enum in request)
+            if (request.incomeLevel() != null) {
+                persona.setIncomeLevel(request.incomeLevel().getValue());
             }
 
             // Set interests if provided
@@ -430,14 +425,9 @@ public class PersonaService {
             persona.setActivitySphere(request.activitySphere().getValue());
             persona.setProfession(request.profession());
 
-            // Set income level if provided
-            if (request.income() != null) {
-                try {
-                    IncomeLevel incomeLevel = IncomeLevel.fromValue(request.income());
-                    persona.setIncomeLevel(incomeLevel.getValue());
-                } catch (Exception e) {
-                    log.warn("Could not parse income level '{}': {}", request.income(), e.getMessage());
-                }
+            // Set income level (already validated as enum in request)
+            if (request.incomeLevel() != null) {
+                persona.setIncomeLevel(request.incomeLevel().getValue());
             }
 
             // Set interests if provided
@@ -565,14 +555,9 @@ public class PersonaService {
             persona.setActivitySphere(request.activitySphere().getValue());
             persona.setProfession(request.profession());
 
-            // Set income level if provided
-            if (request.income() != null) {
-                try {
-                    IncomeLevel incomeLevel = IncomeLevel.fromValue(request.income());
-                    persona.setIncomeLevel(incomeLevel.getValue());
-                } catch (Exception e) {
-                    log.warn("Could not parse income level '{}': {}", request.income(), e.getMessage());
-                }
+            // Set income level (already validated as enum in request)
+            if (request.incomeLevel() != null) {
+                persona.setIncomeLevel(request.incomeLevel().getValue());
             }
 
             // Fill psychographic fields from request
@@ -684,7 +669,7 @@ public class PersonaService {
                     request.gender().getValue(),
                     request.city() + ", " + request.country().getDisplayName(),
                     request.profession(),
-                    request.income()
+                    request.incomeLevel().getValue()
             );
             return objectMapper.writeValueAsString(demographics);
         } catch (Exception e) {
@@ -746,7 +731,7 @@ public class PersonaService {
         characteristics.put("maxAge", request.maxAge());
         characteristics.put("activitySphere", request.activitySphere().getValue());
         characteristics.put("profession", request.profession());
-        characteristics.put("income", request.income());
+        characteristics.put("incomeLevel", request.incomeLevel().getValue());
         characteristics.put("interests", request.interests());
         characteristics.put("additionalParams", request.additionalParams());
         return objectMapper.writeValueAsString(characteristics);
