@@ -46,3 +46,22 @@ build/
 
 ### Application Properties (with API keys) ###
 src/main/resources/application-dev.properties
+
+### Audit Reports (do not commit) ###
+AUDIT*.md
+AUDIT*.txt
+COMPLETE_AUDIT_REPORT.md
+SECURITY_AUDIT_REPORT.md
+SECURITY_AND_LOGIC_ISSUES.md
+SECURITY_FIX_RECOMMENDATIONS.md
+SECURITY_ANALYSIS.md
+SECURITY_SUMMARY.txt
+BUG_SUMMARY.md
+security_audit_summary.json
+PRE_TESTING_AUDIT.md
+README_SECURITY.md
+ANALYSIS_INDEX.md
+ARCHITECTURE_ANALYSIS_REPORT.md
+ARCHITECTURE_AUDIT_REPORT.md
+FIXES_EXAMPLES.md
+AUDIT_DELIVERY_SUMMARY.txt
