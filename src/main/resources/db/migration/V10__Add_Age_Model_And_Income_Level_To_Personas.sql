@@ -6,7 +6,7 @@
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_NAME='personas' AND COLUMN_NAME='model') THEN
-        ALTER TABLE personas ADD COLUMN model VARCHAR(50);
+        ALTER TABLE personas ADD COLUMN model VARCHAR(50) NULL;
         COMMENT ON COLUMN personas.model IS 'AI model used for generation (e.g., claude-3-5-sonnet, gpt-4o)';
     END IF;
 END
@@ -38,7 +38,7 @@ $$;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_NAME='personas' AND COLUMN_NAME='income_level') THEN
-        ALTER TABLE personas ADD COLUMN income_level income_level_enum;
+        ALTER TABLE personas ADD COLUMN income_level income_level_enum NULL;
         COMMENT ON COLUMN personas.income_level IS 'Income classification (LOW, MEDIUM, HIGH)';
     END IF;
 END
