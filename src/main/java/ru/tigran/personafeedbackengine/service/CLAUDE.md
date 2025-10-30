@@ -124,9 +124,9 @@ User registration and login service with JWT token generation and BCrypt passwor
 
 #### BEST: `startBatchPersonaGenerationWithFixedNames(Long userId, PersonaGenerationRequest request) -> List<Long>` ⭐
 - **NEW**: Batch persona generation with FIXED NAMES in PARALLEL
-- **GUARANTEES DIVERSITY**: Uses PersonaName enum with predefined male/female names
+- **GUARANTEES DIVERSITY**: Uses predefined male/female names from database, organized by country
 - Flow:
-  1. Selects N unique random names from PersonaName enum (e.g., 6 different names)
+  1. Selects N unique random names from `names` table (country-specific if available)
   2. Starts N CompletableFuture parallel tasks
   3. Each task calls `AIGatewayService.generatePersonaWithFixedName()` with a specific name
   4. Waits for all tasks to complete using `CompletableFuture.allOf()`
@@ -134,14 +134,24 @@ User registration and login service with JWT token generation and BCrypt passwor
   6. Creates Persona entities with ACTIVE status
   7. Saves all to DB and explicitly flushes
   8. Returns list of persona IDs
+- **Name Selection Strategy** (in `selectRandomNames()`):
+  1. **First priority**: Try to get N names from database for specified country + gender
+     - E.g., if country=RU and gender=FEMALE → gets Russian female names (Marina, Natalia, etc.)
+     - Ensures culturally appropriate names match demographics
+  2. **Fallback 1**: If country not found in DB → get random names of specified gender (any country)
+  3. **Fallback 2**: If database is empty → use in-memory PersonaName enum
 - **Advantages**:
   - ✅ GUARANTEED 100% DIVERSITY: Different names → completely different personas (no Volkovs!)
+  - ✅ CULTURALLY APPROPRIATE: Russian Ольга + Russian demographics (not Nigerian!)
   - ✅ PARALLEL EXECUTION: 6 requests run simultaneously → very fast
-  - ✅ FLEXIBLE: Can use male/female names or mix based on gender
+  - ✅ FLEXIBLE: Automatically adjusts names based on country
   - ✅ ROBUST: Each request can fail independently without affecting others
   - ✅ SIMPLE: Fixed names remove AI uncertainty about name generation
   - ✅ REALISTIC: Name-driven persona generation (name determines entire character)
-- **Helper methods**: `selectRandomNames()`, `parsePersonaData()`
+- **Database**: Uses `NameRepository` to fetch names from `names` table
+  - 400 predefined names: 10 male + 10 female for 20 most popular countries
+  - Countries: RU, US, GB, DE, FR, IT, ES, BR, CN, IN, JP, KR, MX, CA, AU, NL, SE, PL, TR, NG
+- **Helper methods**: `selectRandomNames(gender, country, count)`, `parsePersonaData()`
 - **Helper record**: `PersonaData` - stores parsed persona from AI
 
 #### ALTERNATIVE: `startBatchPersonaGeneration(Long userId, PersonaGenerationRequest request) -> List<Long>`

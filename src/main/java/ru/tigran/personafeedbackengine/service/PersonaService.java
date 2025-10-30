@@ -21,6 +21,7 @@ import ru.tigran.personafeedbackengine.repository.PersonaRepository;
 import ru.tigran.personafeedbackengine.repository.UserRepository;
 
 import ru.tigran.personafeedbackengine.model.PersonaName;
+import ru.tigran.personafeedbackengine.repository.NameRepository;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -58,6 +59,7 @@ public class PersonaService {
 
     private final PersonaRepository personaRepository;
     private final UserRepository userRepository;
+    private final NameRepository nameRepository;
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
     private final AIGatewayService aiGatewayService;
@@ -67,6 +69,7 @@ public class PersonaService {
     public PersonaService(
             PersonaRepository personaRepository,
             UserRepository userRepository,
+            NameRepository nameRepository,
             RabbitTemplate rabbitTemplate,
             ObjectMapper objectMapper,
             AIGatewayService aiGatewayService,
@@ -74,6 +77,7 @@ public class PersonaService {
     ) {
         this.personaRepository = personaRepository;
         this.userRepository = userRepository;
+        this.nameRepository = nameRepository;
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
         this.aiGatewayService = aiGatewayService;
@@ -134,10 +138,11 @@ public class PersonaService {
         String demographicsJson = buildDemographicsJson(request);
         String psychographicsJson = buildPsychographicsJson(request);
 
-        // Step 1: Get N unique names from PersonaName enum
-        // Determine gender distribution from request
-        List<String> selectedNames = selectRandomNames(request.gender(), personaCount);
-        log.info("Selected {} random names for batch generation: {}", selectedNames.size(), selectedNames);
+        // Step 1: Get N unique names from database based on country
+        // Uses names appropriate for the specified country and gender
+        List<String> selectedNames = selectRandomNames(request.gender(), request.country().getCode(), personaCount);
+        log.info("Selected {} random names for country {} and gender {}: {}",
+                selectedNames.size(), request.country().getCode(), request.gender(), selectedNames);
 
         // Step 2: Start N parallel AI generation tasks
         List<CompletableFuture<String>> generationFutures = new ArrayList<>();
@@ -247,17 +252,58 @@ public class PersonaService {
     }
 
     /**
-     * Selects N unique random names based on gender.
-     * Uses PersonaName enum to ensure variety.
+     * Selects N unique random names based on gender and country.
+     * First tries to get names from the specified country.
+     * If country not found in database, falls back to random names of specified gender.
+     *
+     * @param gender The gender ("male" or "female")
+     * @param country The ISO 3166-1 alpha-2 country code (e.g., "RU", "US", "GB")
+     * @param count Number of names to return
+     * @return List of N unique names appropriate for the country and gender
      */
-    private List<String> selectRandomNames(Gender gender, int count) {
-        // For now, we'll just get male or female names
-        // In real scenario, could split 50/50 or use gender distribution
-        if (Gender.FEMALE.equals(gender)) {
-            return PersonaName.getRandomFemaleNames(count);
-        } else {
-            return PersonaName.getRandomMaleNames(count);
+    private List<String> selectRandomNames(Gender gender, String country, int count) {
+        String genderStr = Gender.FEMALE.equals(gender) ? "female" : "male";
+
+        // Step 1: Try to get names from the specified country
+        if (country != null && !country.isEmpty()) {
+            List<ru.tigran.personafeedbackengine.model.Name> countryNames =
+                    nameRepository.findByCountryAndGender(country, genderStr);
+
+            if (!countryNames.isEmpty()) {
+                log.debug("Found {} names for country {} and gender {}", countryNames.size(), country, genderStr);
+
+                // Shuffle and return N names
+                List<ru.tigran.personafeedbackengine.model.Name> shuffled = new ArrayList<>(countryNames);
+                Collections.shuffle(shuffled);
+                return shuffled.stream()
+                        .limit(count)
+                        .map(ru.tigran.personafeedbackengine.model.Name::getName)
+                        .collect(Collectors.toList());
+            }
+
+            log.warn("No names found for country {} in database, falling back to random names", country);
         }
+
+        // Step 2: Fallback - get random names of specified gender from any country
+        List<ru.tigran.personafeedbackengine.model.Name> randomNames = nameRepository.findByGender(genderStr);
+
+        if (randomNames.isEmpty()) {
+            log.warn("No names found in database for gender {}, using fallback names", genderStr);
+            // Final fallback to in-memory PersonaName enum
+            if (Gender.FEMALE.equals(gender)) {
+                return PersonaName.getRandomFemaleNames(count);
+            } else {
+                return PersonaName.getRandomMaleNames(count);
+            }
+        }
+
+        // Shuffle and return N names
+        List<ru.tigran.personafeedbackengine.model.Name> shuffled = new ArrayList<>(randomNames);
+        Collections.shuffle(shuffled);
+        return shuffled.stream()
+                .limit(count)
+                .map(ru.tigran.personafeedbackengine.model.Name::getName)
+                .collect(Collectors.toList());
     }
 
     /**

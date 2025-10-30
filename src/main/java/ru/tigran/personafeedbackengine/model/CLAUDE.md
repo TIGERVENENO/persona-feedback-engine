@@ -38,6 +38,23 @@ JPA entities and domain models for the persona feedback engine.
   - Uses AttributeConverter (JsonbConverter) for List<String> ↔ JSON conversion
   - Converts List<String> to JSON string for database storage, and vice versa on retrieval
 
+### Name
+- **NEW**: Predefined names for persona generation, organized by country and gender
+- Ensures culturally appropriate names match persona demographics
+- Used by `PersonaService.selectRandomNames()` to pick names for batch persona generation
+- Fields:
+  - `id`: Primary key
+  - `name`: The first name (no surname)
+  - `gender`: "male" or "female"
+  - `country`: ISO 3166-1 alpha-2 country code (RU, US, GB, DE, FR, etc.)
+- Data:
+  - 400 predefined names total
+  - 10 male + 10 female names for each of 20 most popular countries
+  - Countries: RU (Russia), US (USA), GB (UK), DE (Germany), FR (France), IT (Italy), ES (Spain), BR (Brazil), CN (China), IN (India), JP (Japan), KR (South Korea), MX (Mexico), CA (Canada), AU (Australia), NL (Netherlands), SE (Sweden), PL (Poland), TR (Turkey), NG (Nigeria)
+- Unique constraint: (name, gender, country) - prevents duplicate entries
+- Index: idx_names_country_gender - optimizes lookup by country and gender
+- **Integration**: PersonaService uses NameRepository to fetch culturally appropriate names during batch persona generation
+
 ### Persona
 - AI-generated character profiles for realistic feedback simulation
 - Owned by a User
