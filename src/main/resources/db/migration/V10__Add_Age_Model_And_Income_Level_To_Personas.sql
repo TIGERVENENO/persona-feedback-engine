@@ -1,17 +1,18 @@
 -- V10__Add_Age_Model_And_Income_Level_To_Personas.sql
--- Adds age, model, and income_level fields to personas table
--- Removes duplicate deprecated income_level String field
--- Consolidates income handling using IncomeLevel enum
+-- Adds model field and converts income handling to IncomeLevel enum
+-- Note: age column already exists from V7, region already exists
 
--- 1. Add new columns
-ALTER TABLE personas ADD COLUMN age INTEGER;
-COMMENT ON COLUMN personas.age IS 'Exact age generated for this persona';
+-- 1. Add model column if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_NAME='personas' AND COLUMN_NAME='model') THEN
+        ALTER TABLE personas ADD COLUMN model VARCHAR(50);
+        COMMENT ON COLUMN personas.model IS 'AI model used for generation (e.g., claude-3-5-sonnet, gpt-4o)';
+    END IF;
+END
+$$;
 
-ALTER TABLE personas ADD COLUMN model VARCHAR(50);
-COMMENT ON COLUMN personas.model IS 'AI model used for generation (e.g., claude-3-5-sonnet, gpt-4o)';
-
--- 2. Rename existing income column to income_level (enum type)
--- First create new enum type for income level
+-- 2. Create enum type for income level if it doesn't exist
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'income_level_enum') THEN
@@ -20,19 +21,41 @@ BEGIN
 END
 $$;
 
--- 2. Drop old string column if it exists and create new enum column
-ALTER TABLE personas DROP COLUMN IF EXISTS income_level;
+-- 3. Drop old deprecated string income_level column if it exists
+-- Keep the new income_level enum column
+DO $$
+BEGIN
+    -- Check if the old string income_level column exists
+    IF EXISTS (SELECT 1 FROM information_schema.COLUMNS
+               WHERE TABLE_NAME='personas' AND COLUMN_NAME='income_level'
+               AND DATA_TYPE='character varying') THEN
+        ALTER TABLE personas DROP COLUMN income_level;
+    END IF;
+END
+$$;
 
-ALTER TABLE personas ADD COLUMN income_level income_level_enum;
-COMMENT ON COLUMN personas.income_level IS 'Income classification (LOW, MEDIUM, HIGH)';
+-- 4. Add new income_level enum column if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_NAME='personas' AND COLUMN_NAME='income_level') THEN
+        ALTER TABLE personas ADD COLUMN income_level income_level_enum;
+        COMMENT ON COLUMN personas.income_level IS 'Income classification (LOW, MEDIUM, HIGH)';
+    END IF;
+END
+$$;
 
--- 3. Drop old income column (string) if it exists
--- Note: This assumes income column was a string for income range like "$50k-$75k"
-ALTER TABLE personas DROP COLUMN IF EXISTS income;
+-- 5. Drop old income column (string) if it exists
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_NAME='personas' AND COLUMN_NAME='income') THEN
+        ALTER TABLE personas DROP COLUMN income;
+    END IF;
+END
+$$;
 
--- 4. Populate region column from city for backward compatibility
+-- 6. Populate region column from city for backward compatibility (if needed)
 -- If region is NULL but city exists, copy city value to region
 UPDATE personas SET region = city WHERE region IS NULL AND city IS NOT NULL;
 
--- Add index for better search performance on age
+-- 7. Add index for better search performance on age if it doesn't exist
 CREATE INDEX IF NOT EXISTS idx_persona_age ON personas(age);
