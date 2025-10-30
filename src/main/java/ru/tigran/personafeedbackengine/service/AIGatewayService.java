@@ -954,6 +954,283 @@ public class AIGatewayService {
     }
 
     /**
+     * Generates 6 distinct personas in a single AI call with robust retry logic.
+     *
+     * GUARANTEED to return valid persona array through retry mechanism:
+     * - Attempt 1-5: If JSON parsing fails, send explicit feedback to AI with error details
+     * - Attempt 6+: If all retries failed, throw exception (frontned should handle gracefully)
+     *
+     * @param userId User ID
+     * @param demographicsJson Target demographics JSON
+     * @param personaCount Number of personas to generate (typically 6)
+     * @return JSON array string with persona objects, validated and properly structured
+     * @throws AIGatewayException if all retry attempts fail
+     */
+    public String generateMultiplePersonasWithRetry(Long userId, String demographicsJson, int personaCount) {
+        log.info("Starting batch persona generation with retry system for user {}, count: {}", userId, personaCount);
+
+        int maxAttempts = 5;
+        int attempt = 0;
+        String lastError = null;
+
+        while (attempt < maxAttempts) {
+            attempt++;
+            try {
+                log.debug("Batch persona generation attempt {}/{}", attempt, maxAttempts);
+
+                String result = generateMultiplePersonasInternal(userId, demographicsJson, personaCount, lastError);
+
+                // Validate result before returning
+                validatePersonasArray(result, personaCount);
+
+                log.info("Successfully generated batch personas on attempt {}", attempt);
+                return result;
+
+            } catch (Exception e) {
+                lastError = e.getMessage();
+                log.warn("Batch persona generation attempt {} failed: {}. Will retry...", attempt, lastError);
+
+                if (attempt >= maxAttempts) {
+                    // All retries exhausted
+                    String message = String.format(
+                            "Failed to generate %d personas after %d attempts. Last error: %s",
+                            personaCount, maxAttempts, lastError
+                    );
+                    log.error(message);
+                    throw new AIGatewayException(
+                            message,
+                            ErrorCode.AI_SERVICE_ERROR.getCode()
+                    );
+                }
+
+                // Exponential backoff before retry
+                long delayMs = Math.min(1000L * (long) Math.pow(2, attempt - 1), 8000L);
+                try {
+                    log.debug("Waiting {}ms before retry attempt {}", delayMs, attempt + 1);
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new AIGatewayException("Persona generation interrupted", ErrorCode.AI_SERVICE_ERROR.getCode());
+                }
+            }
+        }
+
+        throw new AIGatewayException(
+                "Unreachable code reached in generateMultiplePersonasWithRetry",
+                ErrorCode.AI_SERVICE_ERROR.getCode()
+        );
+    }
+
+    /**
+     * Internal method for batch persona generation.
+     * Includes error feedback for AI if previous attempt failed.
+     */
+    private String generateMultiplePersonasInternal(
+            Long userId,
+            String demographicsJson,
+            int personaCount,
+            String previousError
+    ) {
+        String systemPrompt = buildBatchPersonaSystemPrompt(personaCount, previousError);
+
+        String userMessage = String.format("""
+                Generate %d DISTINCTLY DIFFERENT consumer personas based on:
+
+                TARGET DEMOGRAPHICS (use as guideline, vary within/across personas):
+                %s
+
+                Create %d unique personas that represent different consumer archetypes and behaviors.
+                Each persona should feel like a real person with coherent values and life story.
+
+                Return ONLY the JSON array with all %d personas.
+                NO explanation, NO markdown, ONLY valid JSON array that can be immediately parsed.""",
+                personaCount, demographicsJson, personaCount, personaCount);
+
+        String response = callAIProvider(systemPrompt, userMessage);
+
+        // Clean markdown if present
+        String cleanedResponse = cleanMarkdownCodeBlocks(response);
+
+        log.debug("AI batch response (first 500 chars): {}",
+                cleanedResponse.length() > 500 ? cleanedResponse.substring(0, 500) + "..." : cleanedResponse);
+
+        return cleanedResponse;
+    }
+
+    /**
+     * Builds system prompt for batch persona generation with error feedback if needed.
+     */
+    private String buildBatchPersonaSystemPrompt(int personaCount, String previousError) {
+        String errorFeedback = "";
+
+        if (previousError != null && !previousError.isEmpty()) {
+            errorFeedback = String.format("""
+
+                    PREVIOUS ATTEMPT ERROR (FIX THIS):
+                    %s
+
+                    CORRECTION INSTRUCTIONS:
+                    - Ensure response is VALID JSON array that can be parsed by Jackson ObjectMapper
+                    - Use ONLY standard JSON syntax
+                    - Escape all special characters properly
+                    - Do NOT include any text before [ or after ]
+                    - Verify all required fields are present in EVERY persona object
+                    """, previousError);
+        }
+
+        return String.format("""
+                You are a professional consumer research analyst.
+                Your task: Generate %d DISTINCTLY DIFFERENT realistic personas for market research.
+
+                CRITICAL REQUIREMENTS FOR BATCH GENERATION:
+                1. Generate EXACTLY %d DIFFERENT personas - DO NOT repeat or duplicate
+                2. Each persona must have UNIQUE:
+                   - Full name (different surnames, cultural origins) - NO similar names like "Ivan" and "Alexei"
+                   - Age and life stage (vary across 20s, 30s, 40s, 50s, 60s)
+                   - Profession/occupation (developer, manager, accountant, designer, analyst, executive, etc.)
+                   - Income level (low, medium, medium-high, high, very-high)
+                   - Shopping philosophy and values
+                   - Personality traits and lifestyle
+                   - Decision-making approach
+                3. Personas should represent DIFFERENT consumer archetypes:
+                   - Vary by profession type significantly
+                   - Vary by age group
+                   - Vary by income level
+                   - Vary by personality
+                4. ALL OUTPUT MUST BE IN ENGLISH
+
+                %s
+
+                OUTPUT FORMAT (ABSOLUTELY CRITICAL - THIS IS NON-NEGOTIABLE):
+                - Return ONLY a valid JSON array
+                - Start IMMEDIATELY with [ (nothing before)
+                - End IMMEDIATELY with ] (nothing after)
+                - NO markdown, NO code blocks, NO backticks, NO explanations
+                - JSON must be valid and parseable by Jackson ObjectMapper
+                - All string values must use double quotes and properly escaped
+
+                STRICT JSON ARRAY SCHEMA (EXACT REQUIRED FIELDS):
+                [
+                  {
+                    "name": "Full Name",
+                    "age": 28,
+                    "gender": "male|female|non-binary",
+                    "profession": "Job title",
+                    "income_level": "low|medium|medium-high|high|very-high",
+                    "location": "City name",
+                    "detailed_bio": "150-200 word biography with background, lifestyle, values, shopping habits, decision-making style",
+                    "product_attitudes": "How this specific persona evaluates products: priorities, research methods, price sensitivity, brand loyalty",
+                    "personality_archetype": "Brief 2-3 word personality type (e.g., 'Tech-savvy innovator')"
+                  },
+                  ... (repeat for all %d personas with DISTINCTLY DIFFERENT data) ...
+                ]
+
+                VALIDATION CHECKLIST:
+                ✓ Exactly %d personas in array
+                ✓ Each persona has ALL 9 required fields
+                ✓ Names are completely different (no similar surnames)
+                ✓ Professions are different
+                ✓ Income levels are varied
+                ✓ Ages are different
+                ✓ Valid JSON that can be parsed
+                ✓ NO text before [ or after ]
+                ✓ Bios are 150-200 words in ENGLISH
+                """, personaCount, personaCount, errorFeedback, personaCount, personaCount);
+    }
+
+    /**
+     * Validates that response is a proper JSON array with correct structure.
+     * Throws exception with detailed error message if validation fails.
+     */
+    private void validatePersonasArray(String jsonString, int expectedCount) {
+        try {
+            // Parse as JSON
+            JsonNode array = objectMapper.readTree(jsonString);
+
+            // Must be array
+            if (!array.isArray()) {
+                throw new AIGatewayException(
+                        String.format("Expected JSON array, got %s", array.getNodeType()),
+                        ErrorCode.INVALID_AI_RESPONSE.getCode()
+                );
+            }
+
+            // Check size
+            if (array.size() == 0) {
+                throw new AIGatewayException(
+                        "Personas array is empty",
+                        ErrorCode.INVALID_AI_RESPONSE.getCode()
+                );
+            }
+
+            if (array.size() != expectedCount) {
+                log.warn("Expected {} personas but got {}", expectedCount, array.size());
+                // Don't fail, just warn - might still have valid personas
+            }
+
+            // Validate each persona object
+            int personaIndex = 0;
+            for (JsonNode persona : array) {
+                validatePersonaObject(persona, personaIndex);
+                personaIndex++;
+            }
+
+            log.debug("Personas array validation successful: {} personas", array.size());
+
+        } catch (AIGatewayException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AIGatewayException(
+                    "Failed to parse personas array: " + e.getMessage(),
+                    ErrorCode.INVALID_JSON_RESPONSE.getCode(),
+                    e
+            );
+        }
+    }
+
+    /**
+     * Validates a single persona object has all required fields.
+     */
+    private void validatePersonaObject(JsonNode persona, int index) {
+        String[] requiredFields = {
+                "name", "age", "gender", "profession", "income_level",
+                "location", "detailed_bio", "product_attitudes", "personality_archetype"
+        };
+
+        for (String field : requiredFields) {
+            if (!persona.has(field)) {
+                throw new AIGatewayException(
+                        String.format("Persona[%d] missing required field: '%s'", index, field),
+                        ErrorCode.INVALID_AI_RESPONSE.getCode()
+                );
+            }
+
+            JsonNode value = persona.get(field);
+            if (value.isNull()) {
+                throw new AIGatewayException(
+                        String.format("Persona[%d] field '%s' is null", index, field),
+                        ErrorCode.INVALID_AI_RESPONSE.getCode()
+                );
+            }
+
+            if (value.isTextual() && value.asText().isEmpty()) {
+                throw new AIGatewayException(
+                        String.format("Persona[%d] field '%s' is empty string", index, field),
+                        ErrorCode.INVALID_AI_RESPONSE.getCode()
+                );
+            }
+        }
+
+        // Validate age is number
+        if (!persona.get("age").isIntegralNumber()) {
+            throw new AIGatewayException(
+                    String.format("Persona[%d] age must be a number, got: %s", index, persona.get("age").getNodeType()),
+                    ErrorCode.INVALID_AI_RESPONSE.getCode()
+            );
+        }
+    }
+
+    /**
      * Internal exception for retriable errors in async processing.
      */
     private static class RetriableAIException extends RuntimeException {

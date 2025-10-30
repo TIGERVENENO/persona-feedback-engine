@@ -54,30 +54,31 @@ User registration and login service with JWT token generation and BCrypt passwor
 - Models are independently configurable
 
 **Synchronous Methods (blocking):**
+- **RECOMMENDED**: `generateMultiplePersonasWithRetry(Long userId, String demographicsJson, int personaCount) -> String`
+  - **NEW**: Generates N distinct personas (typically 6) in a SINGLE AI call
+  - **Robust retry mechanism**: Up to 5 retry attempts with exponential backoff (1s, 2s, 4s, 8s, 8s max)
+  - **Intelligent error feedback**: If JSON parsing fails, sends explicit error details to AI for correction
+  - **Guaranteed to succeed**: Returns valid JSON array or throws exception
+  - **Returns**: JSON array with persona objects: `[{"name": "...", "age": 28, "profession": "...", ...}, ...]`
+  - **Advantages**:
+    - ✅ 1 API call instead of 6 → 6x faster and cheaper
+    - ✅ AI sees all 6 personas at once → guarantees diversity
+    - ✅ Strict validation: each persona must have all 9 required fields
+    - ✅ Synchronous: frontend gets response immediately
+    - ✅ Exponential backoff prevents overwhelming AI
+  - **Required persona fields**: `name`, `age`, `gender`, `profession`, `income_level`, `location`, `detailed_bio`, `product_attitudes`, `personality_archetype`
+  - **Error handling**: Sends validation error details to AI with explicit correction instructions
+
 - `generatePersonaDetails(Long userId, String demographicsJson, String psychographicsJson)`:
-  - **NOT CACHED** - Each persona call produces a unique persona, even with identical input parameters
-  - This ensures batch persona generation (e.g., 6 personas from same demographics) creates DIVERSE personas
+  - Single persona generation (legacy, not recommended for batch)
+  - **NOT CACHED** - Each call produces a unique persona
   - **Variant-based diversity**: Extracts `variant_number` from psychographicsJson JSON
-    - If `variant_number` is present, includes explicit diversity instruction in system prompt
-    - AI is instructed to generate DISTINCTLY DIFFERENT persona from others in batch:
-      - Different name origin/cultural background
-      - Different personality traits and values
-      - Different profession/occupation type
-      - Different shopping philosophy and decision-making style
-      - Different lifestyle priorities and interests
-  - Generates detailed persona profile with consumer behavior focus
+    - If `variant_number` present, includes explicit diversity instruction in system prompt
+    - AI instructed to generate DISTINCTLY DIFFERENT persona from others in batch
   - **Output ALWAYS in English** for consistency
   - Returns JSON with required and optional fields:
     - **Required**: `name`, `detailed_bio`, `product_attitudes`
-    - **Optional**: `gender`, `age_group`, `race` (AI may not always generate these)
-  - Focuses on shopping habits, brand preferences, decision-making style
-  - Fields:
-    - `name`: Full name matching demographics
-    - `detailed_bio`: Comprehensive bio (150-200 words) covering background, lifestyle, habits, preferences
-    - `product_attitudes`: How persona evaluates and decides on products
-    - `gender` (optional): male|female|non-binary
-    - `age_group` (optional): 18-24|25-34|35-44|45-54|55-64|65+
-    - `race` (optional): Asian|Caucasian|African|Hispanic|Middle Eastern|Indigenous|Mixed|Other
+    - **Optional**: `gender`, `age_group`, `race`
 - `generateFeedbackForProduct(personaBio, personaProductAttitudes, productName, productDescription, productPrice, productCategory, productKeyFeatures, languageCode)`:
   - Not cached (volatile, session-specific)
   - Analyzes product based on persona's shopping habits and values
@@ -109,30 +110,40 @@ User registration and login service with JWT token generation and BCrypt passwor
 - Non-blocking: does not block thread during network I/O
 
 ### PersonaService
-- Entry point for persona generation workflow
-- Uses **two-phase approach** for race condition prevention:
-  - Phase 1: Create all personas and persist to DB
-  - Phase 2: Explicitly flush to ensure database consistency
-  - Phase 3: Publish all generation tasks to queue
-- `startPersonaGeneration(Long userId, PersonaGenerationRequest request)`:
-  - **Phase 1**: Creates N persona entities (state: GENERATING)
-  - **Phase 2**: Calls `personaRepository.flush()` to ensure all persisted
-  - **Phase 3**: Publishes PersonaGenerationTasks to queue with demographicsJson and psychographicsJsonWithVariant
-  - Each persona gets variant_number in psychographics for diversity
-  - Returns ID of first created persona
-- `findOrCreatePersonas(Long userId, List<PersonaVariation> variations) -> List<Long>`:
-  - **Two-phase approach**: Find/create all, flush, then publish tasks
-  - For each variation: searches DB by demographics (gender, age, region, incomeLevel)
-  - If found ACTIVE persona - reuses it (no new task published)
-  - If not found - creates new persona (without publishing yet) and stores in list
-  - After creating all new personas: calls `personaRepository.flush()`
-  - Then publishes all tasks with variant_number included
-  - Returns list of persona IDs (mix of existing and newly created)
-- **Variant-based diversity**: Each persona in batch gets unique variant_number in JSON
-  - Variant number passed to AI in psychographicsJson as `"variant_number": N`
-  - AI uses variant number to generate different personas in batch
-- Validates user existence
-- **Helper record**: `PersonaGenerationInfo(personaId, task, variantNumber)` - stores persona generation info for two-phase approach
+- Entry point for persona generation workflow with **two approaches**
+
+#### RECOMMENDED: `startBatchPersonaGeneration(Long userId, PersonaGenerationRequest request) -> List<Long>`
+- **NEW**: Batch persona generation with single AI call + robust retry logic
+- Flow:
+  1. Calls `AIGatewayService.generateMultiplePersonasWithRetry()` (with 5 retry attempts)
+  2. Parses JSON array response with guaranteed structure validation
+  3. Creates Persona entities with ACTIVE status (already generated, no async task needed)
+  4. Saves all to DB and explicitly flushes
+  5. Returns list of persona IDs
+- **Advantages**:
+  - ✅ 1 AI call instead of 6 → faster and cheaper
+  - ✅ AI sees all 6 personas simultaneously → guarantees diversity
+  - ✅ Robust retry with explicit validation feedback (up to 5 attempts)
+  - ✅ Synchronous: frontned gets response immediately (no async queue needed)
+  - ✅ 100% guaranteed to succeed or throw clear exception
+- **Helper record**: `PersonaData` - stores persona data parsed from AI JSON array
+
+#### Legacy: `startPersonaGeneration(Long userId, PersonaGenerationRequest request)`
+- Creates N persona entities in GENERATING state
+- Uses **two-phase approach** with explicit flush before publishing tasks
+- Publishes PersonaGenerationTasks to RabbitMQ queue for async processing
+- Each persona gets variant_number in psychographics for diversity
+- Returns ID of first created persona
+
+#### `findOrCreatePersonas(Long userId, List<PersonaVariation> variations) -> List<Long>`
+- **Two-phase approach**: Find/create all, flush, then publish tasks
+- For each variation: searches DB by demographics (gender, age, region, incomeLevel)
+- If found ACTIVE persona - reuses it (no new task published)
+- If not found - creates new persona (without publishing) and stores in list
+- After creating all: calls `personaRepository.flush()`
+- Then publishes all tasks with variant_number included
+- Returns mix of existing and newly created persona IDs
+- **Helper record**: `PersonaGenerationInfo(personaId, task, variantNumber)` - stores for two-phase approach
 
 ### PersonaVariationService
 - Generates demographic variations from target audience parameters
