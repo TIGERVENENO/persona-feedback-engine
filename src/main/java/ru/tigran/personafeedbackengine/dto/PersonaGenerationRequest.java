@@ -73,12 +73,5 @@ public record PersonaGenerationRequest(
             count = 6;
         }
     }
-
-    /**
-     * Get the count of personas to generate, with default value of 6
-     */
-    public Integer getCountOrDefault() {
-        return count != null ? count : 6;
-    }
 }
 

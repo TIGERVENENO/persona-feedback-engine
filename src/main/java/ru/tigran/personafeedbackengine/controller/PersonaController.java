@@ -86,12 +86,12 @@ public class PersonaController {
     ) {
         Long userId = extractAuthenticatedUserId();
         log.info("POST /api/v1/personas - user: {}, count: {}, country: {}, activitySphere: {}",
-                userId, request.getCountOrDefault(), request.country(), request.activitySphere());
+                userId, request.count(), request.country(), request.activitySphere());
 
-        Long jobId = personaService.startPersonaGeneration(userId, request);
+        List<Long> jobId = personaService.startBatchPersonaGenerationWithFixedNames(userId, request);
 
         JobResponse response = new JobResponse(
-                jobId,
+                jobId.get(0),
                 "GENERATING"
         );
 

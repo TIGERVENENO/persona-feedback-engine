@@ -9,6 +9,7 @@ import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.type.SqlTypes;
 import org.hibernate.annotations.JdbcTypeCode;
+import ru.tigran.personafeedbackengine.dto.IncomeLevel;
 
 @Entity
 @Table(name = "personas", indexes = {
@@ -60,14 +61,21 @@ public class Persona extends AuditableEntity {
     @Column
     private Integer maxAge;  // Maximum age from request
 
+    @Column
+    private Integer age;  // Exact age generated for this persona
+
+    @Column(length = 50)
+    private String model;  // AI model used for generation (e.g., "claude-3-5-sonnet", "gpt-4o")
+
     @Column(length = 50)
     private String activitySphere;  // Activity sphere/industry (e.g., "IT", "FINANCE", "HEALTHCARE")
 
     @Column(length = 150)
     private String profession;  // Specific profession/role (e.g., "Senior Software Engineer")
 
-    @Column(length = 100)
-    private String income;  // Income range/level (e.g., "$50k-$75k", "Middle class")
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private IncomeLevel incomeLevel;  // Income classification (LOW, MEDIUM, HIGH)
 
     @Column(columnDefinition = "JSONB")
     @JdbcTypeCode(SqlTypes.JSON)
@@ -81,14 +89,8 @@ public class Persona extends AuditableEntity {
     private String characteristicsHash;  // JSON hash of all characteristics for caching and reuse
 
     // Legacy fields (for backward compatibility)
-    @Column
-    private Integer age;  // Exact age (e.g., 27, 34) - DEPRECATED: use minAge/maxAge instead
-
     @Column(length = 50)
     private String region;  // "moscow", "spb", "regions" - DEPRECATED: use city/country instead
-
-    @Column(length = 20)
-    private String incomeLevel;  // "low", "medium", "high" - DEPRECATED: use income instead
 
     @Column(columnDefinition = "JSONB")
     @JdbcTypeCode(SqlTypes.JSON)

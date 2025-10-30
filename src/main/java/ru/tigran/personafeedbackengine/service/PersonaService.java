@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.tigran.personafeedbackengine.config.RabbitMQConfig;
 import ru.tigran.personafeedbackengine.dto.*;
+import ru.tigran.personafeedbackengine.dto.IncomeLevel;
 import ru.tigran.personafeedbackengine.exception.ErrorCode;
 import ru.tigran.personafeedbackengine.exception.ValidationException;
 import ru.tigran.personafeedbackengine.model.Persona;
@@ -117,12 +118,12 @@ public class PersonaService {
      */
     @Transactional
     public List<Long> startBatchPersonaGenerationWithFixedNames(Long userId, PersonaGenerationRequest request) {
-        log.info("Starting BATCH persona generation with FIXED NAMES for user {} with count: {}", userId, request.getCountOrDefault());
+        log.info("Starting BATCH persona generation with FIXED NAMES for user {} with count: {}", userId, request.count());
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ValidationException("User not found", ErrorCode.USER_NOT_FOUND.getCode()));
 
-        int personaCount = request.getCountOrDefault();
+        int personaCount = request.count();
         String characteristicsJson;
 
         try {
@@ -210,10 +211,27 @@ public class PersonaService {
             // Set demographic fields from request
             persona.setCountry(request.country().getCode());
             persona.setCity(request.city());
+            persona.setRegion(request.city());  // Also populate region for backward compatibility
             persona.setDemographicGender(request.gender().getValue());
             persona.setMinAge(request.minAge());
             persona.setMaxAge(request.maxAge());
+
+            // Generate random age from minAge..maxAge range
+            int generatedAge = generateRandomAge(request.minAge(), request.maxAge());
+            persona.setAge(generatedAge);
+
             persona.setActivitySphere(request.activitySphere().getValue());
+            persona.setProfession(request.profession());
+
+            // Set income level if provided
+            if (request.income() != null) {
+                try {
+                    IncomeLevel incomeLevel = IncomeLevel.fromValue(request.income());
+                    persona.setIncomeLevel(incomeLevel);
+                } catch (Exception e) {
+                    log.warn("Could not parse income level '{}': {}", request.income(), e.getMessage());
+                }
+            }
 
             // Set interests if provided
             if (request.interests() != null) {
@@ -350,12 +368,12 @@ public class PersonaService {
      */
     @Transactional
     public List<Long> startBatchPersonaGeneration(Long userId, PersonaGenerationRequest request) {
-        log.info("Starting BATCH persona generation for user {} with count: {}", userId, request.getCountOrDefault());
+        log.info("Starting BATCH persona generation for user {} with count: {}", userId, request.count());
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ValidationException("User not found", ErrorCode.USER_NOT_FOUND.getCode()));
 
-        int personaCount = request.getCountOrDefault();
+        int personaCount = request.count();
         String characteristicsJson;
 
         try {
@@ -405,12 +423,22 @@ public class PersonaService {
             // Set demographic fields from request
             persona.setCountry(request.country().getCode());
             persona.setCity(request.city());
+            persona.setRegion(request.city());  // Also populate region for backward compatibility
             persona.setDemographicGender(request.gender().getValue());
             persona.setMinAge(request.minAge());
             persona.setMaxAge(request.maxAge());
             persona.setActivitySphere(request.activitySphere().getValue());
-            persona.setProfession(personaData.profession());  // From AI
-            persona.setIncome(personaData.incomeLevel());  // From AI
+            persona.setProfession(request.profession());
+
+            // Set income level if provided
+            if (request.income() != null) {
+                try {
+                    IncomeLevel incomeLevel = IncomeLevel.fromValue(request.income());
+                    persona.setIncomeLevel(incomeLevel);
+                } catch (Exception e) {
+                    log.warn("Could not parse income level '{}': {}", request.income(), e.getMessage());
+                }
+            }
 
             // Set interests if provided
             if (request.interests() != null) {
@@ -495,7 +523,7 @@ public class PersonaService {
     }
 
     private Long executeStartPersonaGeneration(Long userId, PersonaGenerationRequest request) {
-        log.info("Starting persona generation for user {} with count: {}", userId, request.getCountOrDefault());
+        log.info("Starting persona generation for user {} with count: {}", userId, request.count());
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ValidationException("User not found", ErrorCode.USER_NOT_FOUND.getCode()));
@@ -512,7 +540,7 @@ public class PersonaService {
         }
 
         // Get the count of personas to generate (default 6)
-        int personaCount = request.getCountOrDefault();
+        int personaCount = request.count();
         List<Persona> createdPersonas = new ArrayList<>();
 
         // Step 1: Create ALL personas first (without publishing tasks yet)
@@ -525,12 +553,27 @@ public class PersonaService {
             // Fill demographic fields from request
             persona.setCountry(request.country().getCode());
             persona.setCity(request.city());
+            persona.setRegion(request.city());  // Also populate region for backward compatibility
             persona.setDemographicGender(request.gender().getValue());
             persona.setMinAge(request.minAge());
             persona.setMaxAge(request.maxAge());
+
+            // Generate random age from minAge..maxAge range
+            int generatedAge = generateRandomAge(request.minAge(), request.maxAge());
+            persona.setAge(generatedAge);
+
             persona.setActivitySphere(request.activitySphere().getValue());
             persona.setProfession(request.profession());
-            persona.setIncome(request.income());
+
+            // Set income level if provided
+            if (request.income() != null) {
+                try {
+                    IncomeLevel incomeLevel = IncomeLevel.fromValue(request.income());
+                    persona.setIncomeLevel(incomeLevel);
+                } catch (Exception e) {
+                    log.warn("Could not parse income level '{}': {}", request.income(), e.getMessage());
+                }
+            }
 
             // Fill psychographic fields from request
             if (request.interests() != null) {
@@ -592,6 +635,19 @@ public class PersonaService {
         // Return the ID of the first created persona (or a job/batch ID in real scenario)
         // In production, you might return a batch ID linking all personas
         return createdPersonas.get(0).getId();
+    }
+
+    /**
+     * Generates a random age within the specified range
+     */
+    private int generateRandomAge(Integer minAge, Integer maxAge) {
+        if (minAge == null || maxAge == null) {
+            return 30;  // Default age if not specified
+        }
+        if (minAge >= maxAge) {
+            return minAge;
+        }
+        return minAge + (int) (Math.random() * (maxAge - minAge + 1));
     }
 
     /**
