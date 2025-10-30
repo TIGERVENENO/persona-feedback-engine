@@ -135,8 +135,7 @@ public class PersonaService {
             );
         }
 
-        // Build demographics for AI
-        String demographicsJson = buildDemographicsJson(request);
+        // Build psychographics for AI
         String psychographicsJson = buildPsychographicsJson(request);
 
         // Step 1: Get N unique names from database based on country
@@ -145,13 +144,28 @@ public class PersonaService {
         log.info("Selected {} random names for country {} and gender {}: {}",
                 selectedNames.size(), request.country().getCode(), request.gender(), selectedNames);
 
-        // Step 2: Start N parallel AI generation tasks
+        // Step 2: Generate N random ages from the range
+        List<Integer> generatedAges = new ArrayList<>();
+        for (int i = 0; i < personaCount; i++) {
+            int age = generateRandomAge(request.minAge(), request.maxAge());
+            generatedAges.add(age);
+        }
+        log.info("Generated {} random ages from range {}-{}: {}",
+                personaCount, request.minAge(), request.maxAge(), generatedAges);
+
+        // Step 3: Start N parallel AI generation tasks with individual demographics
         List<CompletableFuture<String>> generationFutures = new ArrayList<>();
 
-        for (String name : selectedNames) {
+        for (int i = 0; i < selectedNames.size(); i++) {
+            String name = selectedNames.get(i);
+            Integer age = generatedAges.get(i);
+
+            // Build demographics for THIS specific persona with exact age
+            String demographicsJson = buildDemographicsJsonWithAge(request, age);
+
             CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> {
                 try {
-                    log.debug("Starting async persona generation for name: {}", name);
+                    log.debug("Starting async persona generation for name: {} (age {})", name, age);
                     return aiGatewayService.generatePersonaWithFixedName(
                             userId,
                             demographicsJson,
@@ -194,6 +208,7 @@ public class PersonaService {
         for (int i = 0; i < selectedNames.size(); i++) {
             String name = selectedNames.get(i);
             String personaJson = generationFutures.get(i).join();  // Get result
+            Integer age = generatedAges.get(i);  // Use pre-generated age
 
             // Parse the JSON response
             PersonaData personaData = parsePersonaData(personaJson);
@@ -215,10 +230,7 @@ public class PersonaService {
             persona.setDemographicGender(request.gender().getValue());
             persona.setMinAge(request.minAge());
             persona.setMaxAge(request.maxAge());
-
-            // Generate random age from minAge..maxAge range
-            int generatedAge = generateRandomAge(request.minAge(), request.maxAge());
-            persona.setAge(generatedAge);
+            persona.setAge(age);  // Set the exact age that was sent to AI
 
             persona.setActivitySphere(request.activitySphere().getValue());
             persona.setProfession(request.profession());
@@ -595,8 +607,8 @@ public class PersonaService {
         for (int i = 0; i < createdPersonas.size(); i++) {
             Persona persona = createdPersonas.get(i);
 
-            // Build demographics and psychographics with variant number for diversity
-            String demographicsJson = buildDemographicsJson(request);
+            // Build demographics with the EXACT age for this persona
+            String demographicsJson = buildDemographicsJsonWithAge(request, persona.getAge());
             String psychographicsJson = buildPsychographicsJsonWithVariant(request, i + 1);
 
             // Publish task to queue for AI generation
@@ -660,7 +672,28 @@ public class PersonaService {
     }
 
     /**
-     * Builds demographics JSON from new request structure
+     * Builds demographics JSON from new request structure with exact age
+     * Used for personas where we want a specific age in the generated description
+     */
+    private String buildDemographicsJsonWithAge(PersonaGenerationRequest request, Integer age) {
+        try {
+            PersonaDemographics demographics = new PersonaDemographics(
+                    age != null ? age.toString() : (request.minAge() + "-" + request.maxAge()),  // exact age or range
+                    request.gender().getValue(),
+                    request.city() + ", " + request.country().getDisplayName(),
+                    request.profession(),
+                    request.incomeLevel().getValue()
+            );
+            return objectMapper.writeValueAsString(demographics);
+        } catch (Exception e) {
+            log.warn("Could not build demographics JSON with age {}: {}", age, e.getMessage());
+            return "{}";
+        }
+    }
+
+    /**
+     * Builds demographics JSON from new request structure (age range)
+     * Used for personas where we want an age range
      */
     private String buildDemographicsJson(PersonaGenerationRequest request) {
         try {
