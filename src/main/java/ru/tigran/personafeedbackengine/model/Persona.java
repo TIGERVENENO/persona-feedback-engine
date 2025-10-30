@@ -9,8 +9,6 @@ import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.type.SqlTypes;
 import org.hibernate.annotations.JdbcTypeCode;
-import ru.tigran.personafeedbackengine.dto.IncomeLevel;
-import ru.tigran.personafeedbackengine.config.IncomeLevelConverter;
 
 @Entity
 @Table(name = "personas", indexes = {
@@ -74,9 +72,8 @@ public class Persona extends AuditableEntity {
     @Column(length = 150)
     private String profession;  // Specific profession/role (e.g., "Senior Software Engineer")
 
-    @Convert(converter = IncomeLevelConverter.class)
     @Column(length = 10)
-    private IncomeLevel incomeLevel;  // Income classification (LOW, MEDIUM, HIGH)
+    private String incomeLevel;  // Income classification (low, medium, high)
 
     @Column(columnDefinition = "JSONB")
     @JdbcTypeCode(SqlTypes.JSON)
