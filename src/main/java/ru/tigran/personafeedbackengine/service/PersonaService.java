@@ -158,14 +158,20 @@ public class PersonaService {
             return null;
         }
         int avgAge = (minAge + maxAge) / 2;
-        return switch (avgAge) {
-            case _ when avgAge < 25 -> "18-24";
-            case _ when avgAge < 35 -> "25-34";
-            case _ when avgAge < 45 -> "35-44";
-            case _ when avgAge < 55 -> "45-54";
-            case _ when avgAge < 65 -> "55-64";
-            default -> "65+";
-        };
+
+        if (avgAge < 25) {
+            return "18-24";
+        } else if (avgAge < 35) {
+            return "25-34";
+        } else if (avgAge < 45) {
+            return "35-44";
+        } else if (avgAge < 55) {
+            return "45-54";
+        } else if (avgAge < 65) {
+            return "55-64";
+        } else {
+            return "65+";
+        }
     }
 
     /**
