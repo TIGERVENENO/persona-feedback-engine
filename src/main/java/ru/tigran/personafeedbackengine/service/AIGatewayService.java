@@ -75,6 +75,9 @@ public class AIGatewayService {
      * This method is cacheable by userId + structured data JSON to isolate data between users.
      *
      * IMPORTANT: Response is ALWAYS in English for consistency in persona profiles.
+     * Personas are generated based on comprehensive demographic and psychographic parameters including:
+     * - Demographics: gender, country, city, age range, activity sphere, profession, income
+     * - Psychographics: interests, additional parameters
      *
      * Expected response structure:
      * {
@@ -87,53 +90,55 @@ public class AIGatewayService {
      * }
      *
      * @param userId User ID for cache isolation
-     * @param demographicsJson JSON string with demographics (age, gender, location, occupation, income)
-     * @param psychographicsJson JSON string with psychographics (values, lifestyle, painPoints)
+     * @param demographicsJson JSON string with demographics (age range, gender, location, occupation, income)
+     * @param psychographicsJson JSON string with psychographics (activity sphere, additional params, pain points)
      * @return JSON string with persona details (always in English)
      */
     @Cacheable(value = "personaCache", key = "T(ru.tigran.personafeedbackengine.util.CacheKeyUtils).generatePersonaCacheKey(#userId, #demographicsJson + #psychographicsJson)")
     public String generatePersonaDetails(Long userId, String demographicsJson, String psychographicsJson) {
-        log.info("Generating structured persona details for user {}", userId);
+        log.info("Generating detailed persona profile for user {}", userId);
 
         String systemPrompt = """
-                You are a consumer research expert creating detailed persona profiles for market analysis.
+                You are a professional consumer research analyst creating highly detailed, realistic persona profiles for market research and product development.
 
-                CRITICAL INSTRUCTIONS:
-                1. Create a realistic consumer persona based STRICTLY on the provided demographic and psychographic data
-                2. Generate detailed bio (150-200 words) covering shopping habits, brand preferences, decision-making style
-                3. ALL OUTPUT MUST BE IN ENGLISH (regardless of input language)
-                4. Be specific and realistic - base persona on actual consumer behavior patterns
-                5. Include product evaluation approach in product_attitudes field
-                6. Provide gender, age_group, and race fields based on demographics and cultural patterns
+                CRITICAL INSTRUCTIONS FOR PERSONA GENERATION:
+                1. Create a REALISTIC and BELIEVABLE consumer persona strictly based on provided demographic and psychographic characteristics
+                2. Generate compelling narrative bio (150-200 words) that brings the persona to life
+                3. ALL OUTPUT MUST BE IN ENGLISH (regardless of input language) for consistency
+                4. Make the persona specific, credible, and grounded in actual consumer behavior patterns
+                5. Consider the interaction between demographics (age, location, profession, income) and psychographics (interests, values)
+                6. Describe authentic shopping habits, brand preferences, and decision-making approaches based on the persona's background
+                7. Provide thoughtful assessment of how this specific persona would evaluate and choose products
 
                 OUTPUT FORMAT (CRITICAL):
-                - Return ONLY raw JSON object - NO markdown, NO code blocks, NO backticks
-                - Start with { and end with }
-                - Do NOT wrap in ```json ```
+                - Return ONLY raw JSON object - NO markdown formatting, NO code blocks, NO backticks
+                - Start directly with { and end with }
+                - Do NOT wrap response in ```json``` or similar
                 - ALL text fields must be in ENGLISH
+                - JSON must be valid and properly escaped
 
-                JSON structure:
+                JSON RESPONSE STRUCTURE:
                 {
-                  "name": "realistic full name matching demographics and gender",
+                  "name": "Realistic full name that matches demographics and cultural background",
                   "gender": "male|female|non-binary",
                   "age_group": "18-24|25-34|35-44|45-54|55-64|65+",
                   "race": "Asian|Caucasian|African|Hispanic|Middle Eastern|Indigenous|Mixed|Other",
-                  "detailed_bio": "150-200 words about this person: background, lifestyle, shopping habits, brand preferences, decision-making style, typical purchase behavior",
-                  "product_attitudes": "how this person typically evaluates and decides on products in various categories"
+                  "detailed_bio": "Comprehensive 150-200 word biography covering: personal background, lifestyle, education/profession level, shopping philosophy, key values, typical daily life, what matters most to them, how they approach purchases, trusted information sources, brand loyalty patterns, and typical purchase decision process",
+                  "product_attitudes": "Detailed description of how this specific persona approaches product evaluation and selection: What factors they prioritize (price, quality, reviews, sustainability, etc.), how they research purchases, what influences their decisions, typical price sensitivity, preference for online vs in-store, willingness to try new brands, trust factors, and any specific product categories they care about"
                 }
 
-                Remember: Output MUST be in English. Focus on realistic consumer behavior.""";
+                Remember: The persona should feel like a real person, with coherent values, behaviors, and decision-making patterns that align with their demographic and psychographic profile.""";
 
         String userMessage = String.format("""
-                Generate a detailed consumer persona based on the following characteristics:
+                Create a detailed consumer persona based on these comprehensive characteristics:
 
-                DEMOGRAPHICS:
+                DEMOGRAPHIC PROFILE:
                 %s
 
-                PSYCHOGRAPHICS:
+                PSYCHOGRAPHIC PROFILE & INTERESTS:
                 %s
 
-                Create a comprehensive persona profile in ENGLISH.""", demographicsJson, psychographicsJson);
+                Based on this detailed profile, generate a realistic, nuanced persona that feels like a real person with genuine interests, values, and shopping behaviors. Make sure all details are internally consistent and believable.""", demographicsJson, psychographicsJson);
 
         String response = callAIProvider(systemPrompt, userMessage);
         validateJSON(response);
@@ -598,43 +603,49 @@ public class AIGatewayService {
      * @return Mono с JSON строкой деталей персоны (всегда на английском)
      */
     public Mono<String> generatePersonaDetailsAsync(Long userId, String demographicsJson, String psychographicsJson) {
-        log.info("Generating structured persona details asynchronously for user {}", userId);
+        log.info("Generating detailed persona profile asynchronously for user {}", userId);
 
         String systemPrompt = """
-                You are a consumer research expert creating detailed persona profiles for market analysis.
+                You are a professional consumer research analyst creating highly detailed, realistic persona profiles for market research and product development.
 
-                CRITICAL INSTRUCTIONS:
-                1. Create a realistic consumer persona based STRICTLY on the provided demographic and psychographic data
-                2. Generate detailed bio (150-200 words) covering shopping habits, brand preferences, decision-making style
-                3. ALL OUTPUT MUST BE IN ENGLISH (regardless of input language)
-                4. Be specific and realistic - base persona on actual consumer behavior patterns
-                5. Include product evaluation approach in product_attitudes field
+                CRITICAL INSTRUCTIONS FOR PERSONA GENERATION:
+                1. Create a REALISTIC and BELIEVABLE consumer persona strictly based on provided demographic and psychographic characteristics
+                2. Generate compelling narrative bio (150-200 words) that brings the persona to life
+                3. ALL OUTPUT MUST BE IN ENGLISH (regardless of input language) for consistency
+                4. Make the persona specific, credible, and grounded in actual consumer behavior patterns
+                5. Consider the interaction between demographics (age, location, profession, income) and psychographics (interests, values)
+                6. Describe authentic shopping habits, brand preferences, and decision-making approaches based on the persona's background
+                7. Provide thoughtful assessment of how this specific persona would evaluate and choose products
 
                 OUTPUT FORMAT (CRITICAL):
-                - Return ONLY raw JSON object - NO markdown, NO code blocks, NO backticks
-                - Start with { and end with }
-                - Do NOT wrap in ```json ```
+                - Return ONLY raw JSON object - NO markdown formatting, NO code blocks, NO backticks
+                - Start directly with { and end with }
+                - Do NOT wrap response in ```json``` or similar
                 - ALL text fields must be in ENGLISH
+                - JSON must be valid and properly escaped
 
-                JSON structure:
+                JSON RESPONSE STRUCTURE:
                 {
-                  "name": "realistic full name matching demographics",
-                  "detailed_bio": "150-200 words about this person: background, lifestyle, shopping habits, brand preferences, decision-making style, typical purchase behavior",
-                  "product_attitudes": "how this person typically evaluates and decides on products in various categories"
+                  "name": "Realistic full name that matches demographics and cultural background",
+                  "gender": "male|female|non-binary",
+                  "age_group": "18-24|25-34|35-44|45-54|55-64|65+",
+                  "race": "Asian|Caucasian|African|Hispanic|Middle Eastern|Indigenous|Mixed|Other",
+                  "detailed_bio": "Comprehensive 150-200 word biography covering: personal background, lifestyle, education/profession level, shopping philosophy, key values, typical daily life, what matters most to them, how they approach purchases, trusted information sources, brand loyalty patterns, and typical purchase decision process",
+                  "product_attitudes": "Detailed description of how this specific persona approaches product evaluation and selection: What factors they prioritize (price, quality, reviews, sustainability, etc.), how they research purchases, what influences their decisions, typical price sensitivity, preference for online vs in-store, willingness to try new brands, trust factors, and any specific product categories they care about"
                 }
 
-                Remember: Output MUST be in English. Focus on realistic consumer behavior.""";
+                Remember: The persona should feel like a real person, with coherent values, behaviors, and decision-making patterns that align with their demographic and psychographic profile.""";
 
         String userMessage = String.format("""
-                Generate a detailed consumer persona based on the following characteristics:
+                Create a detailed consumer persona based on these comprehensive characteristics:
 
-                DEMOGRAPHICS:
+                DEMOGRAPHIC PROFILE:
                 %s
 
-                PSYCHOGRAPHICS:
+                PSYCHOGRAPHIC PROFILE & INTERESTS:
                 %s
 
-                Create a comprehensive persona profile in ENGLISH.""", demographicsJson, psychographicsJson);
+                Based on this detailed profile, generate a realistic, nuanced persona that feels like a real person with genuine interests, values, and shopping behaviors. Make sure all details are internally consistent and believable.""", demographicsJson, psychographicsJson);
 
         return callAIProviderAsync(systemPrompt, userMessage)
                 .doOnNext(response -> validateJSON(response))

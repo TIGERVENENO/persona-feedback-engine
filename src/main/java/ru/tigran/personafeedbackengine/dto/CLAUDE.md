@@ -3,21 +3,80 @@
 ## Purpose
 Data transfer objects for API layer and message queue communication.
 
+## Enum Classes (Validation & Dropdowns)
+
+### Gender
+Enum for persona gender values. Used for demographic validation and persona generation.
+- Values: MALE, FEMALE, OTHER
+- Provides `getValue()` (e.g., "male") and `getDisplayName()` (e.g., "Male")
+- Static method `fromValue(String value)` for case-insensitive lookup
+
+### Country
+Enum for country codes (ISO 3166-1 alpha-2) used in persona demographic validation.
+Contains major countries from different regions: Europe, Americas, Asia-Pacific, Middle East, Africa.
+- Example values: RU (Russia), US (United States), GB (United Kingdom), DE (Germany), CN (China), etc.
+- Provides `getCode()` and `getDisplayName()`
+- Static method `fromCode(String code)` for case-insensitive lookup
+
+### ActivitySphere
+Enum for activity spheres / industries used in persona demographic validation.
+Represents major industry sectors for persona generation.
+- Values: IT, FINANCE, HEALTHCARE, EDUCATION, RETAIL, MANUFACTURING, CONSTRUCTION, ENTERTAINMENT, MEDIA, REAL_ESTATE, HOSPITALITY, TRANSPORTATION, ENERGY, AGRICULTURE, TELECOMMUNICATIONS, AUTOMOTIVE, FASHION, SPORTS, GOVERNMENT, LAW, CONSULTING, MARKETING, HUMAN_RESOURCES, RESEARCH, STUDENT, UNEMPLOYED, RETIRED, FREELANCE, OTHER
+- Provides `getValue()` and `getDisplayName()`
+- Static method `fromValue(String value)` for case-insensitive lookup
+
 ## API Request DTOs
 
 ### PersonaGenerationRequest
-Structured persona generation request with demographics and psychographics.
-- `demographics: PersonaDemographics` - Demographics data (required, validated)
-- `psychographics: PersonaPsychographics` - Psychographics data (required, validated)
+Structured persona generation request with comprehensive demographic and psychographic parameters.
+Supports batch generation: generates multiple personas (default 6) based on specified characteristics.
 
-### PersonaDemographics
+**Fields:**
+- `gender: Gender` (required, enum) - Gender of persona (MALE, FEMALE, OTHER)
+- `country: Country` (required, enum) - Country (ISO 3166-1 alpha-2 code)
+- `city: String` (required, 1-100 chars) - City name
+- `minAge: Integer` (required, 18-120) - Minimum age for persona age range
+- `maxAge: Integer` (required, 18-120, must be > minAge) - Maximum age for persona age range
+- `activitySphere: ActivitySphere` (required, enum) - Industry/activity sphere (IT, FINANCE, HEALTHCARE, etc.)
+- `profession: String` (optional, max 150 chars) - Specific profession/role (e.g., "Senior Software Engineer")
+- `income: String` (optional, max 100 chars) - Income range (e.g., "$50k-$75k", "High")
+- `interests: List<String>` (optional, max 10 items) - Array of interests/hobbies
+- `additionalParams: String` (optional, max 500 chars) - Additional custom parameters
+- `count: Integer` (optional, 1-10, default 6) - Number of personas to generate
+
+**Usage Example:**
+```json
+{
+  "gender": "MALE",
+  "country": "RU",
+  "city": "Moscow",
+  "minAge": 30,
+  "maxAge": 45,
+  "activitySphere": "IT",
+  "profession": "Senior Backend Developer",
+  "income": "$60k-$80k",
+  "interests": ["Photography", "Travel", "Technology"],
+  "additionalParams": "Recently moved to Moscow, works in fintech startup",
+  "count": 6
+}
+```
+
+**Validation:**
+- All required fields must be non-null
+- Custom validation: maxAge must be > minAge
+- count defaults to 6 if not specified
+- Generated personas are batched and created asynchronously
+
+### PersonaDemographics (Legacy)
+Old structure for backward compatibility. Recommend using PersonaGenerationRequest instead.
 - `age: String` - Age or age range (e.g., "30-40", "Senior")
 - `gender: String` - Gender (e.g., "Male", "Female", "Non-binary")
 - `location: String` - Geographic location (e.g., "New York, USA", "London, UK")
 - `occupation: String` - Job title or occupation (e.g., "Software Engineer", "Teacher")
 - `income: String` - Income range (e.g., "$50k-$75k", "Middle class")
 
-### PersonaPsychographics
+### PersonaPsychographics (Legacy)
+Old structure for backward compatibility.
 - `values: String` - Core values (e.g., "Sustainability, innovation")
 - `lifestyle: String` - Lifestyle description (e.g., "Active, tech-savvy")
 - `painPoints: String` - Key pain points (e.g., "Limited time, budget constraints")
@@ -81,13 +140,30 @@ AI-aggregated insights from completed feedback session.
 - Generic response for all async operations
 
 ### PersonaResponse
-- `id: Long`
-- `name: String`
-- `detailedDescription: String` - 150-200 word bio about shopping habits, brand preferences, decision-making
-- `productAttitudes: String` - How persona evaluates and decides on products
-- `status: String` - GENERATING, ACTIVE, FAILED
+Complete persona information including demographics, psychographics, and AI-generated details.
 
-Note: Personas are ALWAYS generated in English for consistency, regardless of input language.
+**Fields:**
+- `id: Long` - Persona identifier
+- `status: String` - GENERATING, ACTIVE, FAILED
+- `name: String` - AI-generated full name
+- `detailedDescription: String` - 150-200 word bio covering shopping habits, brand preferences, decision-making
+- `productAttitudes: String` - How persona evaluates and decides on products
+- `gender: String` - From request (male, female, non-binary)
+- `country: String` - ISO 3166-1 alpha-2 code
+- `city: String` - City name
+- `minAge: Integer` - Minimum age from request
+- `maxAge: Integer` - Maximum age from request
+- `activitySphere: String` - Activity sphere from request
+- `profession: String` - Specific profession/role (optional)
+- `income: String` - Income range (optional)
+- `interests: List<String>` - Array of interests/hobbies (optional)
+- `additionalParams: String` - Additional custom parameters (optional)
+- `ageGroup: String` - AI-extracted age group (e.g., "25-34", "35-44")
+- `race: String` - AI-extracted race/ethnicity
+- `avatarUrl: String` - Avatar URL if available
+- `createdAt: LocalDateTime` - Creation timestamp
+
+**Note:** Personas are ALWAYS generated in English for consistency, regardless of input language.
 
 ### ProductResponse
 - `id: Long`
@@ -139,3 +215,19 @@ Note: Personas are ALWAYS generated in English for consistency, regardless of in
 - `productId: Long` - Product being reviewed (ID used to load full entity with price, category, keyFeatures)
 - `personaId: Long` - Persona providing feedback (ID used to load full entity with detailedDescription, productAttitudes)
 - `language: String` - ISO 639-1 language code for feedback text (EN, RU, FR, etc.)
+
+## Frontend Support DTOs
+
+### EnumValueDTO
+Single enum value option for frontend dropdowns/selects.
+- `value: String` - The actual enum value (e.g., "male", "RU", "IT")
+- `displayName: String` - Human-readable display name (e.g., "Male", "Russia", "Information Technology")
+
+### EnumValuesResponse
+Response containing all available enum values for persona creation.
+Returned by GET /api/v1/personas/enums endpoint.
+- `genders: List<EnumValueDTO>` - All available gender options
+- `countries: List<EnumValueDTO>` - All available country options
+- `activitySpheres: List<EnumValueDTO>` - All available activity sphere options
+
+**Usage:** Frontend uses this to populate dropdown lists for gender, country, and activity sphere fields in persona creation form.

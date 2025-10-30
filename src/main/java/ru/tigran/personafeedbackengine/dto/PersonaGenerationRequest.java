@@ -1,29 +1,84 @@
 package ru.tigran.personafeedbackengine.dto;
 
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.*;
+import java.util.List;
 
 /**
- * Request DTO for generating a new AI persona using structured input.
+ * Request DTO for generating new AI personas using demographic and psychographic parameters.
  *
  * Triggers async persona generation workflow via RabbitMQ.
+ * Will generate multiple personas (default 6) based on the provided characteristics.
  *
  * Structure:
- * - demographics: Age, gender, location, occupation, income
- * - psychographics: Values, lifestyle, pain points
+ * - Demographics: gender, country, city, age range, activity sphere, profession, income
+ * - Psychographics: interests, additional parameters
+ * - Batch generation: count field specifies how many personas to generate
  *
  * Notes:
- * - Structured data used as cache key (JSON representation)
+ * - All personas are generated in English for consistency
  * - Generation is async, client must poll the persona endpoint to check status
- * - Persona bio always generated in English for consistency
+ * - Characteristics are used for persona reusability/search via characteristicsHash
+ * - count field defaults to 6 personas per request
  */
 public record PersonaGenerationRequest(
-        @NotNull(message = "Demographics cannot be null")
-        @Valid
-        PersonaDemographics demographics,
+        @NotNull(message = "Gender cannot be null")
+        Gender gender,
 
-        @NotNull(message = "Psychographics cannot be null")
-        @Valid
-        PersonaPsychographics psychographics
+        @NotNull(message = "Country cannot be null")
+        Country country,
+
+        @NotBlank(message = "City cannot be blank")
+        @Size(min = 1, max = 100, message = "City must be between 1 and 100 characters")
+        String city,
+
+        @NotNull(message = "Minimum age cannot be null")
+        @Min(value = 18, message = "Minimum age must be at least 18")
+        @Max(value = 120, message = "Minimum age must not exceed 120")
+        Integer minAge,
+
+        @NotNull(message = "Maximum age cannot be null")
+        @Min(value = 18, message = "Maximum age must be at least 18")
+        @Max(value = 120, message = "Maximum age must not exceed 120")
+        Integer maxAge,
+
+        @NotNull(message = "Activity sphere cannot be null")
+        ActivitySphere activitySphere,
+
+        @Size(max = 150, message = "Profession must not exceed 150 characters")
+        String profession,
+
+        @Size(max = 100, message = "Income must not exceed 100 characters")
+        String income,
+
+        @Size(max = 10, message = "Interests list must not exceed 10 items")
+        List<@Size(min = 1, max = 50, message = "Each interest must be between 1 and 50 characters") String> interests,
+
+        @Size(max = 500, message = "Additional parameters must not exceed 500 characters")
+        String additionalParams,
+
+        @Min(value = 1, message = "Count must be at least 1")
+        @Max(value = 10, message = "Count must not exceed 10")
+        Integer count
 ) {
+    /**
+     * Custom validation for age range
+     * Ensures maxAge > minAge
+     */
+    public PersonaGenerationRequest {
+        if (minAge != null && maxAge != null && maxAge <= minAge) {
+            throw new IllegalArgumentException("Maximum age must be greater than minimum age");
+        }
+        // Default count to 6 if not specified
+        if (count == null) {
+            count = 6;
+        }
+    }
+
+    /**
+     * Get the count of personas to generate, with default value of 6
+     */
+    public Integer getCountOrDefault() {
+        return count != null ? count : 6;
+    }
 }
+
