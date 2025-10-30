@@ -1,5 +1,6 @@
 package ru.tigran.personafeedbackengine.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,8 +11,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import ru.tigran.personafeedbackengine.dto.PersonaDemographics;
 import ru.tigran.personafeedbackengine.dto.PersonaGenerationRequest;
 import ru.tigran.personafeedbackengine.dto.PersonaGenerationTask;
+import ru.tigran.personafeedbackengine.dto.PersonaPsychographics;
 import ru.tigran.personafeedbackengine.exception.ValidationException;
 import ru.tigran.personafeedbackengine.model.Persona;
 import ru.tigran.personafeedbackengine.model.User;
@@ -46,29 +49,44 @@ class PersonaServiceTest {
     private PersonaService personaService;
 
     private static final Long USER_ID = 1L;
-    private static final String VALID_PROMPT = "A technical product manager focused on DevOps tools";
-    private static final String LONG_PROMPT = "a".repeat(2001);
-    private static final int MAX_PROMPT_LENGTH = 2000;
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
+        objectMapper = new ObjectMapper();
 
         personaService = new PersonaService(
                 personaRepository,
                 userRepository,
                 rabbitTemplate,
-                MAX_PROMPT_LENGTH,
+                objectMapper,
                 meterRegistry
         );
+    }
+
+    private PersonaGenerationRequest createValidRequest() {
+        PersonaDemographics demographics = new PersonaDemographics(
+                "30-40",  // age
+                "Male",   // gender
+                "New York, USA",  // location
+                "Product Manager",  // occupation
+                "$100k-$150k"  // income
+        );
+        PersonaPsychographics psychographics = new PersonaPsychographics(
+                "Innovation, Leadership",  // values
+                "Active, tech-savvy",  // lifestyle
+                "Limited time, budget"  // painPoints
+        );
+        return new PersonaGenerationRequest(demographics, psychographics);
     }
 
     // ===== УСПЕШНЫЕ СЦЕНАРИИ =====
 
     @Test
-    @DisplayName("startPersonaGeneration - успешное создание персоны с валидным промптом")
+    @DisplayName("startPersonaGeneration - успешное создание персоны с валидными демографическими данными")
     void startPersonaGenerationSuccess() {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(VALID_PROMPT);
+        PersonaGenerationRequest request = createValidRequest();
         User user = new User();
         user.setId(USER_ID);
 
@@ -76,7 +94,6 @@ class PersonaServiceTest {
         savedPersona.setId(42L);
         savedPersona.setUser(user);
         savedPersona.setStatus(Persona.PersonaStatus.GENERATING);
-        savedPersona.setGenerationPrompt(VALID_PROMPT);
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(personaRepository.save(any(Persona.class))).thenReturn(savedPersona);
@@ -85,8 +102,7 @@ class PersonaServiceTest {
 
         assertEquals(42L, personaId);
         verify(personaRepository).save(argThat(persona ->
-                persona.getStatus() == Persona.PersonaStatus.GENERATING &&
-                        persona.getGenerationPrompt().equals(VALID_PROMPT)
+                persona.getStatus() == Persona.PersonaStatus.GENERATING
         ));
         verify(rabbitTemplate).convertAndSend(
                 anyString(),
@@ -98,7 +114,7 @@ class PersonaServiceTest {
     @Test
     @DisplayName("startPersonaGeneration - проверка отправки задачи в очередь с корректными параметрами")
     void startPersonaGenerationPublishesTaskToQueue() {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(VALID_PROMPT);
+        PersonaGenerationRequest request = createValidRequest();
         User user = new User();
         user.setId(USER_ID);
 
@@ -119,13 +135,14 @@ class PersonaServiceTest {
 
         PersonaGenerationTask capturedTask = taskCaptor.getValue();
         assertEquals(42L, capturedTask.personaId());
-        assertEquals(VALID_PROMPT, capturedTask.userPrompt());
+        assertNotNull(capturedTask.demographicsJson());
+        assertNotNull(capturedTask.psychographicsJson());
     }
 
     @Test
-    @DisplayName("startPersonaGeneration - успешно с минимальным промптом (1 символ)")
-    void startPersonaGenerationMinimumPrompt() {
-        PersonaGenerationRequest request = new PersonaGenerationRequest("A");
+    @DisplayName("startPersonaGeneration - успешно с валидными демографическими данными #2")
+    void startPersonaGenerationValidRequest2() {
+        PersonaGenerationRequest request = createValidRequest();
         User user = new User();
         user.setId(USER_ID);
 
@@ -147,10 +164,9 @@ class PersonaServiceTest {
     }
 
     @Test
-    @DisplayName("startPersonaGeneration - успешно с максимальным промптом (2000 символов)")
-    void startPersonaGenerationMaximumPrompt() {
-        String maxPrompt = "a".repeat(2000);
-        PersonaGenerationRequest request = new PersonaGenerationRequest(maxPrompt);
+    @DisplayName("startPersonaGeneration - успешно с валидными демографическими данными #3")
+    void startPersonaGenerationValidRequest3() {
+        PersonaGenerationRequest request = createValidRequest();
         User user = new User();
         user.setId(USER_ID);
 
@@ -169,30 +185,13 @@ class PersonaServiceTest {
     // ===== ОШИБОЧНЫЕ СЦЕНАРИИ =====
 
     @Test
-    @DisplayName("startPersonaGeneration - выброс исключения при промпте длиной > 2000 символов")
-    void startPersonaGenerationPromptTooLong() {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(LONG_PROMPT);
-
-        assertThrows(RuntimeException.class, () ->
-                personaService.startPersonaGeneration(USER_ID, request)
-        );
-
-        verify(userRepository, never()).findById(anyLong());
-        verify(personaRepository, never()).save(any(Persona.class));
-        verify(rabbitTemplate, never()).convertAndSend(
-                anyString(),
-                anyString(),
-                any(PersonaGenerationTask.class)
-        );
-    }
-
-    @Test
     @DisplayName("startPersonaGeneration - выброс исключения при несуществующем пользователе")
     void startPersonaGenerationUserNotFound() {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(VALID_PROMPT);
+        PersonaGenerationRequest request = createValidRequest();
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
 
+        // ValidationException обёрнута в RuntimeException в startPersonaGeneration
         assertThrows(RuntimeException.class, () ->
                 personaService.startPersonaGeneration(USER_ID, request)
         );
@@ -207,9 +206,30 @@ class PersonaServiceTest {
     }
 
     @Test
+    @DisplayName("startPersonaGeneration - успешно создаёт и публикует задачу")
+    void startPersonaGenerationSuccessPublishesMessage() {
+        PersonaGenerationRequest request = createValidRequest();
+        User user = new User();
+        user.setId(USER_ID);
+
+        Persona savedPersona = new Persona();
+        savedPersona.setId(42L);
+        savedPersona.setUser(user);
+        savedPersona.setStatus(Persona.PersonaStatus.GENERATING);
+
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(personaRepository.save(any(Persona.class))).thenReturn(savedPersona);
+
+        Long personaId = personaService.startPersonaGeneration(USER_ID, request);
+
+        assertNotNull(personaId);
+        verify(personaRepository).save(any(Persona.class));
+    }
+
+    @Test
     @DisplayName("startPersonaGeneration - создаваемая персона имеет статус GENERATING")
     void startPersonaGenerationStatusIsGenerating() {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(VALID_PROMPT);
+        PersonaGenerationRequest request = createValidRequest();
         User user = new User();
         user.setId(USER_ID);
 
@@ -229,7 +249,7 @@ class PersonaServiceTest {
     @Test
     @DisplayName("startPersonaGeneration - созданная персона привязана к пользователю")
     void startPersonaGenerationPersonaLinkedToUser() {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(VALID_PROMPT);
+        PersonaGenerationRequest request = createValidRequest();
         User user = new User();
         user.setId(USER_ID);
 
@@ -247,21 +267,29 @@ class PersonaServiceTest {
     }
 
     @Test
-    @DisplayName("startPersonaGeneration - промпт не сохраняется в персону если он >= 2001 символов")
-    void startPersonaGenerationRejectsPromptAt2001Chars() {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(LONG_PROMPT);
+    @DisplayName("startPersonaGeneration - персона имеет generationPrompt с JSON данными")
+    void startPersonaGenerationHasGenerationPrompt() {
+        PersonaGenerationRequest request = createValidRequest();
+        User user = new User();
+        user.setId(USER_ID);
 
-        assertThrows(RuntimeException.class, () ->
-                personaService.startPersonaGeneration(USER_ID, request)
-        );
+        Persona savedPersona = new Persona();
+        savedPersona.setId(42L);
 
-        verify(personaRepository, never()).save(any(Persona.class));
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(personaRepository.save(any(Persona.class))).thenReturn(savedPersona);
+
+        personaService.startPersonaGeneration(USER_ID, request);
+
+        verify(personaRepository).save(argThat(persona ->
+                persona.getGenerationPrompt() != null && !persona.getGenerationPrompt().isEmpty()
+        ));
     }
 
     @Test
     @DisplayName("startPersonaGeneration - множественные вызовы создают разные персоны")
     void startPersonaGenerationMultipleCallsCreateDifferentPersonas() {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(VALID_PROMPT);
+        PersonaGenerationRequest request = createValidRequest();
         User user = new User();
         user.setId(USER_ID);
 
@@ -287,9 +315,9 @@ class PersonaServiceTest {
     }
 
     @Test
-    @DisplayName("startPersonaGeneration - промпт сохраняется в generationPrompt поле")
-    void startPersonaGenerationSavesPromptInGenerationPromptField() {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(VALID_PROMPT);
+    @DisplayName("startPersonaGeneration - сохраняет демографические данные в generationPrompt")
+    void startPersonaGenerationSavesDemographicsInGenerationPrompt() {
+        PersonaGenerationRequest request = createValidRequest();
         User user = new User();
         user.setId(USER_ID);
 
@@ -302,7 +330,9 @@ class PersonaServiceTest {
         personaService.startPersonaGeneration(USER_ID, request);
 
         verify(personaRepository).save(argThat(persona ->
-                VALID_PROMPT.equals(persona.getGenerationPrompt())
+                persona.getGenerationPrompt() != null &&
+                persona.getGenerationPrompt().contains("Male") &&
+                persona.getGenerationPrompt().contains("Product Manager")
         ));
     }
 }

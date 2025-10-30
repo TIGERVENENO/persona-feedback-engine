@@ -1,17 +1,23 @@
 package ru.tigran.personafeedbackengine.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import ru.tigran.personafeedbackengine.config.TestConfig;
-import ru.tigran.personafeedbackengine.config.TestSecurityConfig;
+import ru.tigran.personafeedbackengine.dto.PersonaDemographics;
 import ru.tigran.personafeedbackengine.dto.PersonaGenerationRequest;
+import ru.tigran.personafeedbackengine.dto.PersonaPsychographics;
 import ru.tigran.personafeedbackengine.service.PersonaService;
 
 import static org.hamcrest.Matchers.*;
@@ -25,7 +31,8 @@ import static org.mockito.Mockito.*;
  * Использует @WebMvcTest для изоляции слоев.
  */
 @WebMvcTest(PersonaController.class)
-@Import({TestSecurityConfig.class, TestConfig.class})
+@AutoConfigureMockMvc(addFilters = false)
+@Import({TestConfig.class})
 @DisplayName("PersonaController модульные тесты")
 class PersonaControllerTest {
 
@@ -35,19 +42,42 @@ class PersonaControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @Mock
     private PersonaService personaService;
 
     private static final String PERSONA_URL = "/api/v1/personas";
     private static final String VALID_EMAIL = "test@example.com";
     private static final String VALID_PASSWORD = "password123";
-    private static final String VALID_PROMPT = "A technical product manager focused on DevOps tools";
     private static final Long VALID_USER_ID = 1L;
 
+    @BeforeEach
+    void setUp() {
+        // Подготовить SecurityContext с аутентификацией для каждого теста
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(new UsernamePasswordAuthenticationToken(VALID_USER_ID, null));
+        SecurityContextHolder.setContext(context);
+    }
+
+    private PersonaGenerationRequest createValidRequest() {
+        PersonaDemographics demographics = new PersonaDemographics(
+                "30-40",  // age
+                "Male",   // gender
+                "New York, USA",  // location
+                "Product Manager",  // occupation
+                "$100k-$150k"  // income
+        );
+        PersonaPsychographics psychographics = new PersonaPsychographics(
+                "Innovation, Leadership",  // values
+                "Active, tech-savvy",  // lifestyle
+                "Limited time, budget"  // painPoints
+        );
+        return new PersonaGenerationRequest(demographics, psychographics);
+    }
+
     @Test
-    @DisplayName("POST /personas - успешное создание персоны с валидным промптом и JWT токеном")
+    @DisplayName("POST /personas - успешное создание персоны с валидными демографическими данными и JWT токеном")
     void generatePersonaSuccess() throws Exception {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(VALID_PROMPT);
+        PersonaGenerationRequest request = createValidRequest();
 
         when(personaService.startPersonaGeneration(VALID_USER_ID, request)).thenReturn(100L);
 
@@ -60,9 +90,9 @@ class PersonaControllerTest {
     }
 
     @Test
-    @DisplayName("POST /personas - успешно с минимальным промптом (1 символ)")
-    void generatePersonaMinimumPrompt() throws Exception {
-        PersonaGenerationRequest request = new PersonaGenerationRequest("A");
+    @DisplayName("POST /personas - успешно с валидными демографическими данными")
+    void generatePersonaValidDemographics() throws Exception {
+        PersonaGenerationRequest request = createValidRequest();
 
         when(personaService.startPersonaGeneration(VALID_USER_ID, request)).thenReturn(101L);
 
@@ -75,10 +105,9 @@ class PersonaControllerTest {
     }
 
     @Test
-    @DisplayName("POST /personas - успешно с максимальным промптом (2000 символов)")
-    void generatePersonaMaximumPrompt() throws Exception {
-        String maxPrompt = "a".repeat(2000);
-        PersonaGenerationRequest request = new PersonaGenerationRequest(maxPrompt);
+    @DisplayName("POST /personas - успешно с полными психографическими данными")
+    void generatePersonaWithPsychographics() throws Exception {
+        PersonaGenerationRequest request = createValidRequest();
 
         when(personaService.startPersonaGeneration(VALID_USER_ID, request)).thenReturn(102L);
 
@@ -93,7 +122,7 @@ class PersonaControllerTest {
     @Test
     @DisplayName("POST /personas - возврат HTTP 202 Accepted")
     void generatePersonaReturnsAccepted() throws Exception {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(VALID_PROMPT);
+        PersonaGenerationRequest request = createValidRequest();
 
         when(personaService.startPersonaGeneration(VALID_USER_ID, request)).thenReturn(103L);
 
@@ -106,7 +135,7 @@ class PersonaControllerTest {
     @Test
     @DisplayName("POST /personas - возвращает корректный ID в ответе")
     void generatePersonaReturnsValidId() throws Exception {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(VALID_PROMPT);
+        PersonaGenerationRequest request = createValidRequest();
 
         when(personaService.startPersonaGeneration(VALID_USER_ID, request)).thenReturn(104L);
 
@@ -118,42 +147,44 @@ class PersonaControllerTest {
     }
 
     @Test
-    @DisplayName("POST /personas - 400 Bad Request при промпте длиной > 2000 символов")
-    void generatePersonaPromptTooLong() throws Exception {
-        String longPrompt = "a".repeat(2001);
-        PersonaGenerationRequest request = new PersonaGenerationRequest(longPrompt);
+    @DisplayName("POST /personas - 400 Bad Request при null demographics")
+    void generatePersonaNullDemographics() throws Exception {
+        String invalidJson = "{\"psychographics\": {\"values\": \"test\", \"lifestyle\": \"test\", \"painPoints\": \"test\"}}";
 
         mockMvc.perform(post(PERSONA_URL)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                .content(invalidJson))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    @DisplayName("POST /personas - 400 Bad Request при пустом промпте")
-    void generatePersonaEmptyPrompt() throws Exception {
-        PersonaGenerationRequest request = new PersonaGenerationRequest("");
+    @DisplayName("POST /personas - 400 Bad Request при null psychographics")
+    void generatePersonaNullPsychographics() throws Exception {
+        String invalidJson = "{\"demographics\": {\"age\": \"30\", \"gender\": \"Male\", \"location\": \"NY\", \"occupation\": \"PM\", \"income\": \"100k\"}}";
 
         mockMvc.perform(post(PERSONA_URL)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                .content(invalidJson))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    @DisplayName("POST /personas - 401 Unauthorized без JWT токена")
+    @DisplayName("POST /personas - 403 Forbidden без JWT токена")
     void generatePersonaWithoutToken() throws Exception {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(VALID_PROMPT);
+        // Очистить SecurityContext для этого теста
+        SecurityContextHolder.clearContext();
+
+        PersonaGenerationRequest request = createValidRequest();
 
         mockMvc.perform(post(PERSONA_URL)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isForbidden());
     }
 
     @Test
-    @DisplayName("POST /personas - 400 Bad Request без промпта в теле запроса")
-    void generatePersonaMissingPrompt() throws Exception {
+    @DisplayName("POST /personas - 400 Bad Request при пустом JSON")
+    void generatePersonaMissingBothFields() throws Exception {
         String invalidJson = "{}";
 
         mockMvc.perform(post(PERSONA_URL)
@@ -165,7 +196,7 @@ class PersonaControllerTest {
     @Test
     @DisplayName("POST /personas - множественные запросы создают разные персоны")
     void generatePersonaMultipleRequestsCreateDifferentPersonas() throws Exception {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(VALID_PROMPT);
+        PersonaGenerationRequest request = createValidRequest();
 
         when(personaService.startPersonaGeneration(VALID_USER_ID, request))
                 .thenReturn(110L)
@@ -187,7 +218,7 @@ class PersonaControllerTest {
     @Test
     @DisplayName("POST /personas - статус всегда GENERATING при успешном создании")
     void generatePersonaStatusAlwaysGenerating() throws Exception {
-        PersonaGenerationRequest request = new PersonaGenerationRequest(VALID_PROMPT);
+        PersonaGenerationRequest request = createValidRequest();
 
         when(personaService.startPersonaGeneration(VALID_USER_ID, request)).thenReturn(112L);
 
