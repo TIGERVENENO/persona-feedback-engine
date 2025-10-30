@@ -65,3 +65,7 @@ ARCHITECTURE_ANALYSIS_REPORT.md
 ARCHITECTURE_AUDIT_REPORT.md
 FIXES_EXAMPLES.md
 AUDIT_DELIVERY_SUMMARY.txt
+
+### API Testing ###
+# REST Client requests for local testing
+requests.http
