@@ -63,11 +63,11 @@ public record PersonaGenerationRequest(
 ) {
     /**
      * Custom validation for age range
-     * Ensures maxAge > minAge
+     * Ensures maxAge >= minAge (can be equal)
      */
     public PersonaGenerationRequest {
-        if (minAge != null && maxAge != null && maxAge <= minAge) {
-            throw new IllegalArgumentException("Maximum age must be greater than minimum age");
+        if (minAge != null && maxAge != null && maxAge < minAge) {
+            throw new IllegalArgumentException("Maximum age must be greater than or equal to minimum age");
         }
         // Default count to 6 if not specified
         if (count == null) {
