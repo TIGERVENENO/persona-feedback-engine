@@ -1466,6 +1466,11 @@ public class AIGatewayService {
             request.count()
         );
 
+        // Format additional parameters list
+        String additionalParamsFormatted = request.additionalParams() != null && !request.additionalParams().isEmpty()
+            ? String.join(", ", request.additionalParams())
+            : "Not specified";
+
         return String.format("""
                 Generate %d distinct personas with the following parameters:
 
@@ -1501,7 +1506,7 @@ public class AIGatewayService {
                 professionFormatted,
                 incomeLevelDisplay,
                 interestsFormatted,
-                request.additionalParams() != null ? request.additionalParams() : "None specified",
+                additionalParamsFormatted,
                 request.city(),
                 countryDisplay
         );

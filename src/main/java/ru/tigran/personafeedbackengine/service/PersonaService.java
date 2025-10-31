@@ -248,7 +248,14 @@ public class PersonaService {
                 }
             }
 
-            persona.setAdditionalParams(request.additionalParams());
+            // Set additional parameters if provided (serialize List<String> to JSON)
+            if (request.additionalParams() != null) {
+                try {
+                    persona.setAdditionalParams(objectMapper.writeValueAsString(request.additionalParams()));
+                } catch (Exception e) {
+                    log.warn("Could not serialize additionalParams for persona {}: {}", name, e.getMessage());
+                }
+            }
 
             // Store characteristics hash
             persona.setCharacteristicsHash(characteristicsJson);
@@ -448,7 +455,14 @@ public class PersonaService {
                 }
             }
 
-            persona.setAdditionalParams(request.additionalParams());
+            // Set additional parameters if provided (serialize List<String> to JSON)
+            if (request.additionalParams() != null) {
+                try {
+                    persona.setAdditionalParams(objectMapper.writeValueAsString(request.additionalParams()));
+                } catch (Exception e) {
+                    log.warn("Could not serialize additionalParams for persona {}: {}", i, e.getMessage());
+                }
+            }
 
             // Store characteristics hash for potential reuse
             persona.setCharacteristicsHash(characteristicsJson);
@@ -567,7 +581,14 @@ public class PersonaService {
                 }
             }
 
-            persona.setAdditionalParams(request.additionalParams());
+            // Set additional parameters if provided (serialize List<String> to JSON)
+            if (request.additionalParams() != null) {
+                try {
+                    persona.setAdditionalParams(objectMapper.writeValueAsString(request.additionalParams()));
+                } catch (Exception e) {
+                    log.warn("Could not serialize additionalParams for persona {}: {}", i, e.getMessage());
+                }
+            }
 
             // Store characteristics hash for potential reuse
             persona.setCharacteristicsHash(characteristicsJson);
@@ -725,7 +746,14 @@ public class PersonaService {
                     log.warn("Could not serialize interests: {}", e.getMessage());
                 }
             }
-            persona.setAdditionalParams(request.additionalParams());
+            // Set additional parameters if provided (serialize List<String> to JSON)
+            if (request.additionalParams() != null) {
+                try {
+                    persona.setAdditionalParams(objectMapper.writeValueAsString(request.additionalParams()));
+                } catch (Exception e) {
+                    log.warn("Could not serialize additionalParams: {}", e.getMessage());
+                }
+            }
 
             // Set AI model used for generation
             persona.setModel(aiGatewayService.getConfiguredModel());
@@ -837,9 +865,10 @@ public class PersonaService {
     private String buildPsychographicsJson(PersonaGenerationRequest request) {
         try {
             String interests = request.interests() != null ? String.join(", ", request.interests()) : "";
+            String additionalParams = request.additionalParams() != null ? String.join(", ", request.additionalParams()) : "";
             PersonaPsychographics psychographics = new PersonaPsychographics(
                     request.activitySphere().getDisplayName() + (interests.isEmpty() ? "" : ", " + interests),
-                    request.additionalParams() != null ? request.additionalParams() : "",
+                    additionalParams,
                     ""  // painPoints will be determined by AI
             );
             return objectMapper.writeValueAsString(psychographics);
@@ -860,9 +889,10 @@ public class PersonaService {
     private String buildPsychographicsJsonWithVariant(PersonaGenerationRequest request, int variantNumber) {
         try {
             String interests = request.interests() != null ? String.join(", ", request.interests()) : "";
+            String additionalParams = request.additionalParams() != null ? String.join(", ", request.additionalParams()) : "";
             Map<String, Object> psychographicsMap = new LinkedHashMap<>();
             psychographicsMap.put("values", request.activitySphere().getDisplayName() + (interests.isEmpty() ? "" : ", " + interests));
-            psychographicsMap.put("lifestyle", request.additionalParams() != null ? request.additionalParams() : "");
+            psychographicsMap.put("lifestyle", additionalParams);
             psychographicsMap.put("pain_points", "");  // AI will determine
             psychographicsMap.put("variant_number", variantNumber);  // For diversity hint
             return objectMapper.writeValueAsString(psychographicsMap);

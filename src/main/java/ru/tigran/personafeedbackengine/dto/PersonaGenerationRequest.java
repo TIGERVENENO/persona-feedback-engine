@@ -54,8 +54,8 @@ public record PersonaGenerationRequest(
         @Size(max = 10, message = "Interests list must not exceed 10 items")
         List<@Size(min = 1, max = 50, message = "Each interest must be between 1 and 50 characters") String> interests,
 
-        @Size(max = 500, message = "Additional parameters must not exceed 500 characters")
-        String additionalParams,
+        @Size(max = 10, message = "Additional parameters list must not exceed 10 items")
+        List<@Size(min = 1, max = 100, message = "Each additional parameter must be between 1 and 100 characters") String> additionalParams,
 
         @Min(value = 1, message = "Count must be at least 1")
         @Max(value = 10, message = "Count must not exceed 10")
