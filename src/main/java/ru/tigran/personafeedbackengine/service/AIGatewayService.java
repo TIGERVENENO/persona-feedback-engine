@@ -566,10 +566,13 @@ public class AIGatewayService {
 
             var messagesArray = rootNode.putArray("messages");
 
-            // Add system message
-            var systemMessage = messagesArray.addObject();
-            systemMessage.put("role", "system");
-            systemMessage.put("content", systemPrompt);
+            // Add system message ONLY if provided and not empty
+            // (Preset provides its own system prompt, so we skip adding it when preset is used)
+            if (systemPrompt != null && !systemPrompt.isBlank()) {
+                var systemMessage = messagesArray.addObject();
+                systemMessage.put("role", "system");
+                systemMessage.put("content", systemPrompt);
+            }
 
             // Add user message
             var userMsg = messagesArray.addObject();
@@ -1386,11 +1389,12 @@ public class AIGatewayService {
             try {
                 log.debug("Batch persona generation attempt {}/{}", attempt, maxAttempts);
 
-                String systemPrompt = PersonaPromptBuilder.buildSystemPrompt(request.count());
-                String userPrompt = PersonaPromptBuilder.buildUserPrompt(request);
+                // Build user prompt with demographics/psychographics
+                String userPrompt = buildUserPromptForPreset(request);
 
                 // Use OpenRouter preset for persona generation if configured
-                String result = callAIProvider(systemPrompt, userPrompt, "personas");
+                // NOTE: Preset provides its own system prompt, so we pass empty string
+                String result = callAIProvider("", userPrompt, "personas");
 
                 // Validate result before returning
                 validatePersonasArray(result, request.count());
@@ -1430,6 +1434,76 @@ public class AIGatewayService {
         throw new AIGatewayException(
                 "Unreachable code reached in generatePersonasFromRequest",
                 ErrorCode.AI_SERVICE_ERROR.getCode()
+        );
+    }
+
+    /**
+     * Builds user prompt for preset-based persona generation.
+     * Provides demographics and psychographics without system instructions
+     * (system prompt is provided by @preset/create-persons).
+     */
+    private String buildUserPromptForPreset(PersonaGenerationRequest request) {
+        // Format interests list
+        String interestsFormatted = request.interests() != null && !request.interests().isEmpty()
+            ? String.join(", ", request.interests())
+            : "Not specified";
+
+        // Format profession
+        String professionFormatted = request.profession() != null && !request.profession().isEmpty()
+            ? request.profession()
+            : "Varies by persona";
+
+        // Get enum display names
+        String genderDisplay = request.gender().getDisplayName();
+        String countryDisplay = request.country().getDisplayName();
+        String incomeLevelDisplay = request.incomeLevel().getDisplayName();
+        String activitySphereDisplay = request.activitySphere().getDisplayName();
+
+        // Calculate age distribution
+        String ageDistribution = PersonaPromptBuilder.calculateAgeDistribution(
+            request.minAge(),
+            request.maxAge(),
+            request.count()
+        );
+
+        return String.format("""
+                Generate %d distinct personas with the following parameters:
+
+                DEMOGRAPHICS:
+                - Gender: %s
+                - Country: %s
+                - City: %s
+                - Age range: %d-%d years old (distribute ages: %s)
+                - Activity sphere: %s
+                - Profession: %s
+                - Income level: %s
+
+                PSYCHOGRAPHICS:
+                - Interests: %s
+                - Additional traits: %s
+
+                REQUIREMENTS:
+                - Each persona must be UNIQUE in every aspect
+                - All ages from the list must be used (no duplicates)
+                - Each persona in different neighborhood within %s
+                - ALL interests must be explicitly mentioned with specific examples
+                - All names appropriate for %s culture
+                - Focus on realistic consumer behavior patterns
+                """,
+                request.count(),
+                genderDisplay,
+                countryDisplay,
+                request.city(),
+                request.minAge(),
+                request.maxAge(),
+                ageDistribution,
+                activitySphereDisplay,
+                professionFormatted,
+                incomeLevelDisplay,
+                interestsFormatted,
+                request.additionalParams() != null ? request.additionalParams() : "None specified",
+                request.city(),
+                countryDisplay
         );
     }
 

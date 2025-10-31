@@ -595,7 +595,11 @@ public class PersonaService {
 
     /**
      * Parses JSON array from AI batch generation.
-     * Expected format: [{"name": "...", "age": 28, ...}, ...]
+     * Supports two formats:
+     * 1. Preset format (from @preset/create-persons):
+     *    [{"name": "...", "age": "...", "detailed_description": "..."}, ...]
+     * 2. Custom format:
+     *    [{"name": "...", "age": 28, "detailed_bio": "...", "product_attitudes": "...", ...}, ...]
      */
     private List<PersonaData> parsePersonasArray(String jsonArray) {
         try {
@@ -603,16 +607,42 @@ public class PersonaService {
             List<PersonaData> personas = new ArrayList<>();
 
             for (JsonNode node : array) {
+                // Determine if this is preset format or custom format
+                String detailedBio;
+                int age;
+
+                if (node.has("detailed_description") && !node.get("detailed_description").isNull()) {
+                    // Preset format: detailed_description contains the full persona description
+                    detailedBio = node.get("detailed_description").asText();
+                } else if (node.has("detailed_bio") && !node.get("detailed_bio").isNull()) {
+                    // Custom format: separate detailed_bio field
+                    detailedBio = node.get("detailed_bio").asText();
+                } else {
+                    detailedBio = "";
+                }
+
+                if (node.has("age")) {
+                    JsonNode ageNode = node.get("age");
+                    // Handle age as either string or integer (preset returns string, custom might return int)
+                    if (ageNode.isNumber()) {
+                        age = ageNode.asInt();
+                    } else {
+                        age = Integer.parseInt(ageNode.asText());
+                    }
+                } else {
+                    age = 0;
+                }
+
                 PersonaData data = new PersonaData(
                         node.get("name").asText(),
-                        node.get("age").asInt(),
-                        node.get("gender").asText(),
-                        node.get("profession").asText(),
-                        node.get("income_level").asText(),
-                        node.get("location").asText(),
-                        node.get("detailed_bio").asText(),
-                        node.get("product_attitudes").asText(),
-                        node.get("personality_archetype").asText()
+                        age,
+                        node.has("gender") ? node.get("gender").asText() : "",
+                        node.has("profession") ? node.get("profession").asText() : "",
+                        node.has("income_level") ? node.get("income_level").asText() : "",
+                        node.has("location") ? node.get("location").asText() : "",
+                        detailedBio,
+                        node.has("product_attitudes") ? node.get("product_attitudes").asText() : "", // Empty for preset format
+                        node.has("personality_archetype") ? node.get("personality_archetype").asText() : ""
                 );
                 personas.add(data);
             }
