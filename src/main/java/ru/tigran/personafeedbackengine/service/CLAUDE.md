@@ -39,6 +39,49 @@ User registration and login service with JWT token generation and BCrypt passwor
 - Both methods log authentication attempts at info level
 - Errors include descriptive messages (INVALID_CREDENTIALS, EMAIL_ALREADY_EXISTS)
 
+### PersonaPromptBuilder
+- **NEW**: Builder for constructing structured AI prompts for persona generation
+- Provides centralized prompt management with clear demographic/psychographic sections
+- Automatic age distribution calculation for even spread across specified range
+- Integrates seamlessly with PersonaGenerationRequest parameters
+- Supports multiple generation scenarios with specialized prompts
+
+**Static Methods:**
+- `buildSystemPrompt(int personaCount) -> String`
+  - Builds optimized system prompt for batch persona generation
+  - Includes CORE REQUIREMENTS, OUTPUT FORMAT, VALIDATION CHECKLIST sections
+  - Specifies sampling parameters (temperature 0.7, top_p 0.95, frequency_penalty 0.2, etc.)
+  - Returns consistent, battle-tested system prompt for any persona count (1-10)
+
+- `buildUserPrompt(PersonaGenerationRequest request) -> String`
+  - **RECOMMENDED**: Builds structured user prompt from PersonaGenerationRequest
+  - Automatically extracts all demographics and psychographics from request
+  - Calculates age distribution using helper method
+  - Returns formatted prompt with DEMOGRAPHICS, PSYCHOGRAPHICS, CRITICAL REQUIREMENTS sections
+  - Integrates interests and traits throughout persona descriptions
+  - Includes validation checklist specific to requested count
+
+- `calculateAgeDistribution(int minAge, int maxAge, int count) -> String`
+  - Helper method for even age distribution
+  - Example: minAge=20, maxAge=60, count=5 → "20, 30, 40, 50, 60"
+  - For single persona: returns average age (minAge + maxAge) / 2
+  - For multiple personas: distributes evenly with equal steps
+  - Used internally by buildUserPrompt()
+
+- `buildFeedbackSystemPrompt() -> String`
+  - Specialized system prompt for product feedback generation
+  - More conservative than persona generation (temperature 0.6)
+  - Includes security warnings about <DATA> tags
+
+- `buildThemeAggregationPrompt() -> String`
+  - Specialized system prompt for feedback theme aggregation
+  - Most conservative settings (temperature 0.5) for logical grouping
+  - Format expects JSON array output
+
+**Integration:**
+- Used by `AIGatewayService.generatePersonasFromRequest()` for batch generation
+- Can be used directly in PersonaService for flexible prompt customization
+
 ### AIGatewayService
 - Smart multi-provider client for AI API integration (OpenRouter, AgentRouter)
 - Supports both **synchronous** (RestClient) and **asynchronous** (WebClient) HTTP calls
@@ -47,13 +90,30 @@ User registration and login service with JWT token generation and BCrypt passwor
 - Dynamic provider selection based on `app.ai.provider` configuration
 - Supports any LLM model (Claude, GPT-4o, Mistral, etc.)
 - **Consumer research focus**: Generates realistic personas and feedback for market analysis
+- **OpenRouter Preset support**: Optimized presets for personas and feedback generation
 
 **Configuration:**
 - `app.ai.provider` - Choose between "openrouter" or "agentrouter"
 - Each provider has separate API key and model configuration
 - Models are independently configurable
+- **OpenRouter Presets:**
+  - `app.openrouter.preset-personas` - Preset for persona generation (default: `@preset/create-persons`)
+  - `app.openrouter.preset-feedback` - Preset for feedback generation (optional, leave empty to not use)
 
 **Synchronous Methods (blocking):**
+- **RECOMMENDED**: `generatePersonasFromRequest(Long userId, PersonaGenerationRequest request) -> String`
+  - **NEW**: Generates N personas using PersonaPromptBuilder for structured prompts
+  - Uses PersonaGenerationRequest for all demographic/psychographic parameters
+  - Automatic age distribution calculation and formatting
+  - Robust retry mechanism (5 attempts with exponential backoff, 1s→2s→4s→8s→8s max)
+  - Returns valid JSON array or throws exception
+  - **Advantages**:
+    - ✅ Structured prompts with clear demographic/psychographic sections
+    - ✅ Automatic age distribution ensures full range coverage
+    - ✅ All parameters properly formatted from PersonaGenerationRequest
+    - ✅ Same validation as other batch methods
+  - **Integration**: Used by `PersonaService.startBatchPersonaGenerationWithPromptBuilder()`
+
 - **BEST**: `generatePersonaWithFixedName(Long userId, String demographicsJson, String psychographicsJson, String fixedName) -> String`
   - **NEW**: Generates a single persona with a FIXED NAME (for guaranteed diversity in batch)
   - **Usage**: Call this 6 times with 6 different names from PersonaName enum for guaranteed diversity
@@ -112,6 +172,32 @@ User registration and login service with JWT token generation and BCrypt passwor
 - Robust parsing handles cases where AI ignores "no markdown" instructions
 - Applies `cleanMarkdownCodeBlocks()` method to all extracted content before validation
 
+**OpenRouter Preset Integration:**
+- `private String callAIProvider(String systemPrompt, String userMessage, String usePreset)`
+  - Core method with OpenRouter preset support
+  - Parameter `usePreset` can be: "personas", "feedback", or null
+  - Automatically includes preset in request body if OpenRouter provider is configured
+  - Logs which preset is being used for debugging
+- `private String callAIProvider(String systemPrompt, String userMessage)` (legacy)
+  - Delegates to main method with usePreset=null
+  - Maintains backward compatibility with existing code
+
+**Preset Usage in Methods:**
+- `generatePersonasFromRequest()` - Uses preset "personas" (default: @preset/create-persons)
+  - Optimized for batch persona generation with PersonaPromptBuilder
+  - Automatically applies preset if configured in OpenRouter
+- `generateFeedbackForProduct()` - Uses preset "feedback" (optional, if configured)
+  - Optimized for product feedback generation
+  - Only applies preset if openrouter.preset-feedback is configured and not empty
+
+**Request Body Generation:**
+- `buildRequestBody()` method automatically:
+  1. Checks if provider is OpenRouter
+  2. Checks if usePreset is specified
+  3. Validates that preset configuration exists and is not empty
+  4. Adds "preset" field to JSON request body if conditions are met
+  5. Logs the preset being used for debugging
+
 **Async Implementation Details:**
 - Uses Spring WebFlux WebClient with Reactor Netty
 - Retry mechanism for retriable errors (429, 502, 503, 504) with exponential backoff
@@ -120,7 +206,24 @@ User registration and login service with JWT token generation and BCrypt passwor
 - Non-blocking: does not block thread during network I/O
 
 ### PersonaService
-- Entry point for persona generation workflow with **three approaches**
+- Entry point for persona generation workflow with **four approaches**
+
+#### RECOMMENDED: `startBatchPersonaGenerationWithPromptBuilder(Long userId, PersonaGenerationRequest request) -> List<Long>` ⭐⭐
+- **NEW**: Batch persona generation with PersonaPromptBuilder for structured prompts
+- **BEST OVERALL**: Combines structured prompts with robust retry mechanism
+- Uses `PersonaPromptBuilder.buildSystemPrompt()` and `PersonaPromptBuilder.buildUserPrompt()`
+- Calls `AIGatewayService.generatePersonasFromRequest()` (with 5 retry attempts)
+- Generates all N personas in ONE AI call with clear demographic/psychographic sections
+- **Advantages**:
+  - ✅ Structured prompts with clear sections (DEMOGRAPHICS, PSYCHOGRAPHICS, REQUIREMENTS)
+  - ✅ Automatic age distribution ensures full range coverage
+  - ✅ All parameters properly formatted from PersonaGenerationRequest
+  - ✅ 1 API call (cheapest, fastest wall-clock time)
+  - ✅ Robust retry with exponential backoff
+  - ✅ 100% guaranteed to succeed or throw exception
+  - ✅ Flexible: Works with any PersonaGenerationRequest configuration
+- **Disadvantage**: ❌ Slightly less diversity guarantee than fixed names approach
+- **Integration**: Uses PersonaPromptBuilder for centralized prompt management
 
 #### BEST: `startBatchPersonaGenerationWithFixedNames(Long userId, PersonaGenerationRequest request) -> List<Long>` ⭐
 - **NEW**: Batch persona generation with FIXED NAMES in PARALLEL
