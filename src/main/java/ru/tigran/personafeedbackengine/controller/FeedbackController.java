@@ -110,10 +110,7 @@ public class FeedbackController {
 
         Long sessionId = feedbackService.startFeedbackSession(userId, request);
 
-        JobResponse response = new JobResponse(
-                sessionId,
-                "PENDING"
-        );
+        JobResponse response = JobResponse.single(sessionId, "PENDING");
 
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }

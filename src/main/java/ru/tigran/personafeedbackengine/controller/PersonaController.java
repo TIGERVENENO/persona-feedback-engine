@@ -88,12 +88,12 @@ public class PersonaController {
         log.info("POST /api/v1/personas - user: {}, count: {}, country: {}, activitySphere: {}",
                 userId, request.count(), request.country(), request.activitySphere());
 
-        List<Long> jobId = personaService.startBatchPersonaGenerationWithFixedNames(userId, request);
+        List<Long> personaIds = personaService.startBatchPersonaGenerationWithPromptBuilder(userId, request);
 
-        JobResponse response = new JobResponse(
-                jobId.get(0),
-                "GENERATING"
-        );
+        log.info("Successfully triggered batch persona generation for user {}: {} personas (IDs: {})",
+                userId, personaIds.size(), personaIds);
+
+        JobResponse response = new JobResponse(personaIds, "GENERATING");
 
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }

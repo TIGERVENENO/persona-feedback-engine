@@ -135,9 +135,35 @@ AI-aggregated insights from completed feedback session.
 ## API Response DTOs
 
 ### JobResponse
-- `jobId: Long` - ID of created job (Persona or FeedbackSession)
-- `status: String` - Initial status (e.g., "GENERATING", "PENDING")
-- Generic response for all async operations
+Generic response for asynchronous job operations (batch and single jobs).
+
+**Fields:**
+- `jobIds: List<Long>` - List of job IDs
+  - For batch persona generation: contains multiple persona IDs (e.g., [1, 2, 3, 4, 5, 6])
+  - For single feedback session: contains single session ID (e.g., [123])
+- `status: String` - Initial job status (e.g., "GENERATING", "PENDING")
+
+**Helper Methods:**
+- `static JobResponse.single(Long jobId, String status)` - Convenience method to wrap single ID in list
+  - Usage: `JobResponse.single(sessionId, "PENDING")`
+  - Automatically wraps ID in List.of(jobId)
+- `Long getFirstJobId()` - Gets first job ID from list (useful for backward compatibility)
+  - Returns: jobIds.get(0)
+  - Throws: IndexOutOfBoundsException if jobIds is empty
+
+**Examples:**
+```json
+{
+  "jobIds": [1, 2, 3, 4, 5, 6],
+  "status": "GENERATING"
+}
+```
+```json
+{
+  "jobIds": [123],
+  "status": "PENDING"
+}
+```
 
 ### PersonaResponse
 Complete persona information including demographics, psychographics, and AI-generated details.

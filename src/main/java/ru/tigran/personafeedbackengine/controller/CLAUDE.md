@@ -35,25 +35,36 @@ Triggers persona generation workflow with user isolation via JWT.
 - **Requires JWT authentication** (Authorization: Bearer <token>)
 
 **Methods:**
-- **POST /api/v1/personas**: Trigger persona generation
-  - Request: `PersonaGenerationRequest` (prompt text)
-  - Response: `JobResponse` with persona ID and initial status "GENERATING"
+- **POST /api/v1/personas**: Trigger batch persona generation
+  - Request: `PersonaGenerationRequest` (demographics, psychographics, count)
+  - Response: `JobResponse` with **all generated persona IDs** and initial status "GENERATING"
   - HTTP Status: 202 Accepted
   - User ID extracted from JWT token in SecurityContext
-  - Validates prompt length, user permissions
-  - **Usage**: Start asynchronous persona generation workflow
+  - Validates all request parameters (gender, country, age range, etc.)
+  - **Usage**: Start asynchronous batch persona generation workflow
+  - **NEW**: Uses PersonaPromptBuilder for structured, optimized prompts
 
   **Example Flow:**
   ```
   Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   POST /api/v1/personas
   {
-    "prompt": "A technical product manager focused on DevOps tools..."
+    "gender": "MALE",
+    "country": "RU",
+    "city": "Moscow",
+    "minAge": 25,
+    "maxAge": 45,
+    "activitySphere": "IT",
+    "profession": "Senior Backend Developer",
+    "incomeLevel": "HIGH",
+    "interests": ["Photography", "Travel", "Technology"],
+    "additionalParams": "Recently moved to Moscow",
+    "count": 6
   }
 
   Response (202 Accepted):
   {
-    "id": 42,
+    "jobIds": [1, 2, 3, 4, 5, 6],
     "status": "GENERATING"
   }
   ```
@@ -108,12 +119,13 @@ Manages feedback session workflows with user isolation via JWT.
 
 **Methods:**
 - **POST /api/v1/feedback-sessions**: Trigger feedback session
-  - Request: `FeedbackSessionRequest` (productIds, personaIds)
-  - Response: `JobResponse` with session ID and initial status "PENDING"
+  - Request: `FeedbackSessionRequest` (productIds, personaIds or targetAudience)
+  - Response: `JobResponse` with **session ID wrapped in jobIds list** and initial status "PENDING"
   - HTTP Status: 202 Accepted
   - User ID extracted from JWT token in SecurityContext
   - Validates product/persona ownership, counts, existence
   - **Usage**: Start asynchronous feedback generation for product and persona combinations
+  - **Note**: Uses `JobResponse.single(sessionId, "PENDING")` helper method
 
   **Example Flow:**
   ```
@@ -126,7 +138,7 @@ Manages feedback session workflows with user isolation via JWT.
 
   Response (202 Accepted):
   {
-    "id": 123,
+    "jobIds": [123],
     "status": "PENDING"
   }
   ```
