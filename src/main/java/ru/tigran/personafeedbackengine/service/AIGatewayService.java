@@ -422,7 +422,7 @@ public class AIGatewayService {
         int attempt = 0;
         while (attempt < maxRetries) {
             try {
-                log.debug("Calling {} API, attempt {}", provider, attempt + 1);
+                log.info("callAIProvider - API call attempt {}/{}, provider={}, usePreset={}", attempt + 1, maxRetries, provider, usePreset != null ? usePreset : "NONE");
                 String requestBody = buildRequestBody(systemPrompt, userMessage, model, usePreset);
 
                 String response = restClient.post()
@@ -456,20 +456,21 @@ public class AIGatewayService {
                 String extractedContent = extractMessageContent(response);
 
                 // ===== LOG ALL AI REQUESTS AND RESPONSES =====
-//                log.info("════════════════════════════════════════════════════════════════════════");
-//                log.info("🤖 AI GATEWAY REQUEST/RESPONSE");
-//                log.info("════════════════════════════════════════════════════════════════════════");
-//                log.info("Provider: {} | Model: {} | Attempt: {}/{}", provider, model, attempt + 1, maxRetries);
-//                log.info("");
-//                log.info("📤 SYSTEM PROMPT:");
-//                log.info("{}", systemPrompt);
-//                log.info("");
-//                log.info("📤 USER MESSAGE:");
-//                log.info("{}", userMessage);
-//                log.info("");
-//                log.info("📥 AI RESPONSE:");
-//                log.info("{}", extractedContent);
-//                log.info("════════════════════════════════════════════════════════════════════════");
+                log.info("════════════════════════════════════════════════════════════════════════");
+                log.info("AI GATEWAY REQUEST/RESPONSE");
+                log.info("════════════════════════════════════════════════════════════════════════");
+                log.info("Provider: {} | Model: {} | Attempt: {}/{}", provider, model, attempt + 1, maxRetries);
+                log.info("Preset: {}", usePreset != null ? (usePreset.equals("personas") ? openRouterPresetPersonas : openRouterPresetFeedback) : "NONE");
+                log.info("");
+                log.info("SYSTEM PROMPT:");
+                log.info("{}", systemPrompt != null && !systemPrompt.isEmpty() ? systemPrompt : "[EMPTY - Preset provides system prompt]");
+                log.info("");
+                log.info("USER MESSAGE (first 500 chars):");
+                log.info("{}", userMessage.length() > 500 ? userMessage.substring(0, 500) + "..." : userMessage);
+                log.info("");
+                log.info("AI RESPONSE (first 800 chars):");
+                log.info("{}", extractedContent.length() > 800 ? extractedContent.substring(0, 800) + "..." : extractedContent);
+                log.info("════════════════════════════════════════════════════════════════════════");
 
                 return extractedContent;
 
@@ -666,11 +667,14 @@ public class AIGatewayService {
             // Validate response size before processing
             validateResponseSize(response);
 
+            log.debug("Parsing API response to extract content...");
             JsonNode root = objectMapper.readTree(response);
             JsonNode content = root.at("/choices/0/message/content");
 
             // Check if the path exists and is not missing or null
             if (content == null || content.isNull() || content.isMissingNode()) {
+                log.error("Missing content in API response. Response root keys: {}", root.fieldNames().hasNext() ? String.join(", ", java.util.stream.StreamSupport.stream(java.util.Spliterators.spliteratorUnknownSize(root.fieldNames(), java.util.Spliterator.ORDERED), false).collect(java.util.stream.Collectors.toList())) : "NONE");
+                log.error("Response preview: {}", response.length() > 200 ? response.substring(0, 200) : response);
                 throw new AIGatewayException(
                     "Missing content in API response",
                     ErrorCode.AI_SERVICE_ERROR.getCode(),
@@ -678,6 +682,7 @@ public class AIGatewayService {
                 );
             }
             String rawContent = content.asText();
+            log.debug("Successfully extracted content, length: {}", rawContent.length());
 
             // Clean markdown code blocks if present (models sometimes ignore "no markdown" instruction)
             return cleanMarkdownCodeBlocks(rawContent);
@@ -1257,16 +1262,20 @@ public class AIGatewayService {
      */
     private void validatePersonasArray(String jsonString, int expectedCount) {
         try {
+            log.info("validatePersonasArray - Validating response as JSON array...");
             // Parse as JSON
             JsonNode array = objectMapper.readTree(jsonString);
 
             // Must be array
             if (!array.isArray()) {
+                log.error("Expected JSON array, but got: {}", array.getNodeType());
                 throw new AIGatewayException(
                         String.format("Expected JSON array, got %s", array.getNodeType()),
                         ErrorCode.INVALID_AI_RESPONSE.getCode()
                 );
             }
+
+            log.info("Parsed as array successfully, size: {}", array.size());
 
             // Check size
             if (array.size() == 0) {
@@ -1378,7 +1387,14 @@ public class AIGatewayService {
      * @return JSON string with array of generated personas
      */
     public String generatePersonasFromRequest(Long userId, PersonaGenerationRequest request) {
-        log.info("Starting batch persona generation from request for user {}, count: {}", userId, request.count());
+        log.info("═══════════════════════════════════════════════════════════════════════════");
+        log.info("STARTING BATCH PERSONA GENERATION FROM REQUEST");
+        log.info("═══════════════════════════════════════════════════════════════════════════");
+        log.info("User ID: {} | Personas to generate: {}", userId, request.count());
+        log.info("Demographics: Gender={}, Country={}, City={}, Age={}-{}, ActivitySphere={}, Income={}",
+                request.gender(), request.country(), request.city(),
+                request.minAge(), request.maxAge(), request.activitySphere(), request.incomeLevel());
+        log.info("═══════════════════════════════════════════════════════════════════════════");
 
         int maxAttempts = 5;
         int attempt = 0;
@@ -1387,24 +1403,26 @@ public class AIGatewayService {
         while (attempt < maxAttempts) {
             attempt++;
             try {
-                log.debug("Batch persona generation attempt {}/{}", attempt, maxAttempts);
+                log.info("Batch persona generation attempt {}/{}", attempt, maxAttempts);
 
                 // Build user prompt with demographics/psychographics
                 String userPrompt = buildUserPromptForPreset(request);
 
                 // Use OpenRouter preset for persona generation if configured
                 // NOTE: Preset provides its own system prompt, so we pass empty string
+                log.info("Calling callAIProvider with preset='personas', systemPrompt=EMPTY");
                 String result = callAIProvider("", userPrompt, "personas");
 
                 // Validate result before returning
+                log.info("API returned response, validating structure...");
                 validatePersonasArray(result, request.count());
 
-                log.info("Successfully generated batch personas from request on attempt {}", attempt);
+                log.info("SUCCESS: Generated batch personas from request on attempt {}", attempt);
                 return result;
 
             } catch (Exception e) {
                 lastError = e.getMessage();
-                log.warn("Batch persona generation attempt {} failed: {}. Will retry...", attempt, lastError);
+                log.error("FAILED: Batch persona generation attempt {} failed: {}", attempt, lastError, e);
 
                 if (attempt >= maxAttempts) {
                     // All retries exhausted
@@ -1412,7 +1430,7 @@ public class AIGatewayService {
                             "Failed to generate %d personas from request after %d attempts. Last error: %s",
                             request.count(), maxAttempts, lastError
                     );
-                    log.error(message);
+                    log.error("ALL ATTEMPTS EXHAUSTED: {}", message);
                     throw new AIGatewayException(
                             message,
                             ErrorCode.AI_SERVICE_ERROR.getCode()
@@ -1422,7 +1440,7 @@ public class AIGatewayService {
                 // Exponential backoff before retry
                 long delayMs = Math.min(1000L * (long) Math.pow(2, attempt - 1), 8000L);
                 try {
-                    log.debug("Waiting {}ms before retry attempt {}", delayMs, attempt + 1);
+                    log.warn("Waiting {}ms before retry attempt {}...", delayMs, attempt + 1);
                     Thread.sleep(delayMs);
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();

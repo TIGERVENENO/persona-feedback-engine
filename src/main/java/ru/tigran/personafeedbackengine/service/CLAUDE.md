@@ -186,6 +186,8 @@ User registration and login service with JWT token generation and BCrypt passwor
 - `generatePersonasFromRequest()` - Uses preset "personas" (default: @preset/create-persons)
   - Optimized for batch persona generation with PersonaPromptBuilder
   - Automatically applies preset if configured in OpenRouter
+  - Comprehensive logging: tracks outer loop attempts (5 max), inner loop attempts (3 max)
+  - Logs all API requests/responses with request/response preview in INFO level
 - `generateFeedbackForProduct()` - Uses preset "feedback" (optional, if configured)
   - Optimized for product feedback generation
   - Only applies preset if openrouter.preset-feedback is configured and not empty
@@ -197,6 +199,21 @@ User registration and login service with JWT token generation and BCrypt passwor
   3. Validates that preset configuration exists and is not empty
   4. Adds "preset" field to JSON request body if conditions are met
   5. Logs the preset being used for debugging
+
+**Logging & Debugging:**
+- **Detailed request/response logging**: INFO level logs show:
+  - generatePersonasFromRequest outer loop attempt number (e.g., "attempt 1/5")
+  - callAIProvider inner loop attempt number (e.g., "API call attempt 1/3")
+  - System prompt and user message (first 500 chars preview)
+  - AI response content (first 800 chars preview)
+  - Preset being used (or "NONE")
+- **Error logging**: extractMessageContent() logs:
+  - Response root keys when content extraction fails
+  - Response preview (first 200 chars)
+  - Helps diagnose "Expected JSON array, got MISSING" errors
+- **Validation logging**: validatePersonasArray() logs:
+  - Array size and node type
+  - Detailed error messages with actual vs expected count
 
 **Async Implementation Details:**
 - Uses Spring WebFlux WebClient with Reactor Netty
