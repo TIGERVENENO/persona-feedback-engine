@@ -65,9 +65,9 @@ class PersonaControllerTest {
                 40,                                    // maxAge
                 ActivitySphere.CONSULTING,             // activitySphere
                 "Product Manager",                     // profession
-                "$100k-$150k",                         // income
+                IncomeLevel.HIGH,                      // incomeLevel
                 java.util.List.of("Innovation", "Leadership", "Technology"),  // interests
-                "Active, tech-savvy lifestyle",        // additionalParams
+                java.util.List.of("Active", "tech-savvy lifestyle"),  // additionalParams
                 6                                      // count
         );
     }

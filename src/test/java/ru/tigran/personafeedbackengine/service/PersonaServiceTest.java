@@ -53,11 +53,17 @@ class PersonaServiceTest {
         meterRegistry = new SimpleMeterRegistry();
         objectMapper = new ObjectMapper();
 
+        // Mock the required dependencies
+        var nameRepository = org.mockito.Mockito.mock(ru.tigran.personafeedbackengine.repository.NameRepository.class);
+        var aiGatewayService = org.mockito.Mockito.mock(ru.tigran.personafeedbackengine.service.AIGatewayService.class);
+
         personaService = new PersonaService(
                 personaRepository,
                 userRepository,
+                nameRepository,
                 rabbitTemplate,
                 objectMapper,
+                aiGatewayService,
                 meterRegistry
         );
     }
@@ -71,9 +77,9 @@ class PersonaServiceTest {
                 40,                                    // maxAge
                 ActivitySphere.CONSULTING,             // activitySphere
                 "Product Manager",                     // profession
-                "$100k-$150k",                         // income
+                IncomeLevel.HIGH,                      // incomeLevel
                 java.util.List.of("Innovation", "Leadership", "Technology"),  // interests
-                "Active, tech-savvy lifestyle",        // additionalParams
+                java.util.List.of("Active", "tech-savvy lifestyle"),  // additionalParams
                 6                                      // count
         );
     }
