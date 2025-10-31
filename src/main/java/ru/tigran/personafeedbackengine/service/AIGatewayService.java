@@ -1293,7 +1293,7 @@ public class AIGatewayService {
             // Validate each persona object
             int personaIndex = 0;
             for (JsonNode persona : array) {
-                validatePersonaObject(persona, personaIndex);
+                validatePresetPersonaObject(persona, personaIndex);
                 personaIndex++;
             }
 
@@ -1311,8 +1311,49 @@ public class AIGatewayService {
     }
 
     /**
-     * Validates a single persona object has all required fields.
+     * Validates a persona object from preset response.
+     * Preset returns: name, age, detailed_description
      */
+    private void validatePresetPersonaObject(JsonNode persona, int index) {
+        // Preset returns minimal fields
+        String[] requiredFields = {"name", "age", "detailed_description"};
+
+        for (String field : requiredFields) {
+            if (!persona.has(field)) {
+                throw new AIGatewayException(
+                        String.format("Persona[%d] missing required field: '%s'", index, field),
+                        ErrorCode.INVALID_AI_RESPONSE.getCode()
+                );
+            }
+
+            JsonNode value = persona.get(field);
+            if (value.isNull()) {
+                throw new AIGatewayException(
+                        String.format("Persona[%d] field '%s' is null", index, field),
+                        ErrorCode.INVALID_AI_RESPONSE.getCode()
+                );
+            }
+
+            if (value.isTextual() && value.asText().isEmpty()) {
+                throw new AIGatewayException(
+                        String.format("Persona[%d] field '%s' is empty string", index, field),
+                        ErrorCode.INVALID_AI_RESPONSE.getCode()
+                );
+            }
+        }
+
+        log.debug("Persona[{}] validation successful: name={}, age={}, description length={}",
+                index,
+                persona.get("name").asText(),
+                persona.get("age").asText(),
+                persona.get("detailed_description").asText().length());
+    }
+
+    /**
+     * Validates a single persona object has all required fields (legacy).
+     * @deprecated Use validatePresetPersonaObject instead for preset responses
+     */
+    @Deprecated
     private void validatePersonaObject(JsonNode persona, int index) {
         String[] requiredFields = {
                 "name", "age", "gender", "profession", "income_level",

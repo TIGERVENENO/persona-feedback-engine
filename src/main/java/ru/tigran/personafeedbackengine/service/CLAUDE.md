@@ -211,9 +211,18 @@ User registration and login service with JWT token generation and BCrypt passwor
   - Response root keys when content extraction fails
   - Response preview (first 200 chars)
   - Helps diagnose "Expected JSON array, got MISSING" errors
-- **Validation logging**: validatePersonasArray() logs:
+- **Validation logging**: validatePersonasArray() and validatePresetPersonaObject() log:
   - Array size and node type
   - Detailed error messages with actual vs expected count
+  - Per-persona validation: name, age, description length
+
+**Preset Response Structure:**
+- `@preset/create-persons` returns personas with minimal fields:
+  - `name`: String - persona full name
+  - `age`: String or Number - persona age
+  - `detailed_description`: String - 150+ word biography
+- Legacy responses (non-preset) require all 9 fields including gender, profession, location, etc.
+- Validation automatically adapts to preset response structure
 
 **Async Implementation Details:**
 - Uses Spring WebFlux WebClient with Reactor Netty
